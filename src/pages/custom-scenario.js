@@ -1,140 +1,581 @@
 /**
- * 自定义剧本页 — AI 生成剧本
+ * 自定义剧本创作工坊 — 4步分步向导
+ * Step 1: 灵感激发（主题模板 + 自由输入）
+ * Step 2: 剧本设定（风格/时代/难度/NPC/特殊要求）
+ * Step 3: 虚空酝酿（AI 生成动画播报）
+ * Step 4: 剧本预览与微调
  */
 
 import { aiService } from '../game/ai-service.js'
 import { addCustomScenario } from '../scenarios/scenario-registry.js'
 
-let generating = false
+// ===== 常量 =====
+const THEME_TEMPLATES = [
+  { emoji: '🏫', name: '校园怪谈', keywords: '校园、怪谈、社团' },
+  { emoji: '🏝️', name: '孤岛惊魂', keywords: '孤岛、暴风雨、求生' },
+  { emoji: '🚀', name: '太空密室', keywords: '空间站、失重、氧气告急' },
+  { emoji: '🏰', name: '中世纪古堡', keywords: '城堡、骑士、密道' },
+  { emoji: '🎪', name: '午夜马戏团', keywords: '马戏团、魔术、消失' },
+  { emoji: '🏥', name: '废弃医院', keywords: '医院、病历、夜班' },
+  { emoji: '🎬', name: '惊悚片场', keywords: '片场、导演、道具' },
+  { emoji: '🚢', name: '迷雾游轮', keywords: '游轮、浓雾、船长' },
+  { emoji: '🏔️', name: '雪山别墅', keywords: '暴风雪、别墅、封路' },
+  { emoji: '🎰', name: '赌场风云', keywords: '赌场、千术、筹码' },
+  { emoji: '🌃', name: '赛博都市', keywords: '赛博朋克、AI、黑市' },
+  { emoji: '🏛️', name: '失窃博物馆', keywords: '博物馆、名画、监控' },
+]
 
+const STYLE_OPTIONS = [
+  { value: '本格推理', label: '🔍 本格推理', desc: '严密逻辑推理，公平解谜' },
+  { value: '变格惊悚', label: '🔪 变格惊悚', desc: '心理恐怖，氛围压迫' },
+  { value: '轻松搞笑', label: '😂 轻松搞笑', desc: '喜剧元素，反转搞笑' },
+  { value: '古风文艺', label: '🌸 古风文艺', desc: '诗词意境，情感纠葛' },
+  { value: '硬核烧脑', label: '⚡ 硬核烧脑', desc: '多重反转，极限推理' },
+]
+
+const ERA_OPTIONS = [
+  { value: '现代都市', label: '🏙️ 现代都市', desc: '当下城市社会背景' },
+  { value: '民国旧影', label: '🏮 民国旧影', desc: '20世纪初旧中国' },
+  { value: '古代王朝', label: '🏯 古代王朝', desc: '古装宫廷或江湖' },
+  { value: '遥远未来', label: '🛸 遥远未来', desc: '科幻或后现代世界' },
+]
+
+const DIFFICULTY_OPTIONS = [
+  { value: 2, label: '⭐⭐ 入门' },
+  { value: 3, label: '⭐⭐⭐ 进阶' },
+  { value: 4, label: '⭐⭐⭐⭐ 困难' },
+  { value: 5, label: '⭐⭐⭐⭐⭐ 大师' },
+]
+
+const NPC_OPTIONS = [
+  { value: 3, label: '3 人' },
+  { value: 4, label: '4 人' },
+]
+
+const GENERATE_STAGES = [
+  { icon: '🧩', text: '正在构思核心诡计...' },
+  { icon: '👥', text: '正在塑造嫌疑人画像...' },
+  { icon: '🔗', text: '正在埋设逻辑冲突与线索...' },
+  { icon: '✨', text: '正在完善最终真相...' },
+]
+
+const difficultyLabels = { 2: '入门', 3: '进阶', 4: '困难', 5: '大师' }
+
+const STEP_LABELS = [
+  { num: 1, label: '灵感' },
+  { num: 2, label: '设定' },
+  { num: 3, label: '生成' },
+  { num: 4, label: '预览' },
+]
+
+// ===== 状态 =====
+let wizardState = {}
+let generateTimer = null
+
+function resetState() {
+  wizardState = {
+    currentStep: 1,
+    theme: '',
+    selectedTemplate: -1,
+    description: '',
+    style: '',
+    era: '',
+    difficulty: 3,
+    npcCount: 4,
+    specialRequest: '',
+    generatedScenario: null,
+  }
+}
+
+// ===== 渲染 =====
 export function renderCustom() {
+  resetState()
   return `
     <div class="custom page">
-      <div class="container" style="max-width:700px;">
-        <div style="text-align:center;margin-bottom:40px;">
-          <h1 class="text-title" style="font-size:2rem;">✨ 创建新剧本</h1>
+      <div class="container" style="max-width:720px;">
+        <div style="text-align:center;margin-bottom:24px;">
+          <h1 class="text-title" style="font-size:2rem;">✨ 剧本创作工坊</h1>
           <p class="text-small" style="margin-top:8px;">
-            输入你的创意，让 AI 为你生成一个全新的推理剧本
+            分步引导，让 AI 为你打造独一无二的推理剧本
           </p>
         </div>
 
-        <div class="deduction-section">
-          <div class="deduction-section-title">🎭 剧本主题</div>
-          <input class="input" id="custom-theme" type="text" placeholder="例：校园推理、海岛度假村、太空站" />
-        </div>
+        ${renderStepper(1)}
 
-        <div class="deduction-section">
-          <div class="deduction-section-title">📝 补充描述（可选）</div>
-          <textarea class="input" id="custom-desc" rows="3" placeholder="描述你想要的风格、角色类型、故事氛围等..."></textarea>
-        </div>
-
-        <div class="deduction-section">
-          <div class="deduction-section-title">⚙️ 设置</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-            <div>
-              <label class="settings-label">难度</label>
-              <select class="input" id="custom-difficulty">
-                <option value="2">⭐⭐ 入门</option>
-                <option value="3" selected>⭐⭐⭐ 进阶</option>
-                <option value="4">⭐⭐⭐⭐ 困难</option>
-                <option value="5">⭐⭐⭐⭐⭐ 大师</option>
-              </select>
-            </div>
-            <div>
-              <label class="settings-label">NPC 数量</label>
-              <select class="input" id="custom-npc-count">
-                <option value="3">3 人</option>
-                <option value="4" selected>4 人</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        ${!aiService.isConfigured ? `
-          <div style="text-align:center;padding:20px;background:rgba(248,113,113,0.08);border-radius:12px;margin-bottom:24px;">
-            <p style="color:var(--color-danger);margin-bottom:8px;">⚠️ 需要配置 API Key 才能使用 AI 生成功能</p>
-            <button class="btn btn-ghost btn-sm" id="btn-settings-custom">配置 API</button>
-          </div>
-        ` : ''}
-
-        <div id="generate-status" style="display:none;text-align:center;padding:40px 20px;">
-          <div class="typing-indicator" style="justify-content:center;margin-bottom:16px;">
-            <div class="typing-dot"></div>
-            <div class="typing-dot"></div>
-            <div class="typing-dot"></div>
-          </div>
-          <p style="color:var(--color-text-secondary);" id="generate-text">AI 正在创作剧本，请稍候...</p>
-        </div>
-
-        <div style="display:flex;gap:16px;margin-top:32px;">
-          <button class="btn btn-ghost" id="btn-back-home" style="flex:1;">
-            ← 返回大厅
-          </button>
-          <button class="btn btn-primary btn-lg" id="btn-generate" style="flex:2;" ${!aiService.isConfigured ? 'disabled' : ''}>
-            🤖 AI 生成剧本
-          </button>
+        <div id="wizard-content">
+          ${renderStep1()}
         </div>
       </div>
     </div>
   `
 }
 
-export function initCustom(router) {
-  generating = false
+function renderStepper(current) {
+  return `
+    <div class="wizard-stepper" id="wizard-stepper">
+      ${STEP_LABELS.map((s, i) => {
+        const cls = current > s.num ? 'completed' : current === s.num ? 'active' : ''
+        const connector = i < STEP_LABELS.length - 1
+          ? `<div class="wizard-step-connector ${current > s.num ? 'active' : ''}"></div>`
+          : ''
+        return `
+          <div class="wizard-step ${cls}">
+            <span class="wizard-step-number">${current > s.num ? '✓' : s.num}</span>
+            <span>${s.label}</span>
+          </div>
+          ${connector}
+        `
+      }).join('')}
+    </div>
+  `
+}
 
+// ===== Step 1: 灵感激发 =====
+function renderStep1() {
+  return `
+    <div class="wizard-panel" id="step-1">
+      <div class="deduction-section">
+        <div class="deduction-section-title">🎭 选择灵感主题</div>
+        <div class="theme-grid" id="theme-grid">
+          ${THEME_TEMPLATES.map((t, i) => `
+            <div class="theme-card ${wizardState.selectedTemplate === i ? 'selected' : ''}" data-index="${i}" data-keywords="${t.keywords}">
+              <span class="theme-card-emoji">${t.emoji}</span>
+              <span class="theme-card-name">${t.name}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="deduction-section">
+        <div class="deduction-section-title">✏️ 主题名称</div>
+        <input class="input" id="custom-theme" type="text" placeholder="选择上方模板自动填入，也可自由输入..." value="${wizardState.theme}" />
+      </div>
+
+      <div class="deduction-section">
+        <div class="deduction-section-title">📝 补充描述（可选）</div>
+        <textarea class="input" id="custom-desc" rows="3" placeholder="描述你想要的核心诡计、角色类型或剧情走向...">${wizardState.description}</textarea>
+      </div>
+
+      ${!aiService.isConfigured ? `
+        <div style="text-align:center;padding:20px;background:rgba(248,113,113,0.08);border-radius:12px;margin-bottom:24px;">
+          <p style="color:var(--color-danger);margin-bottom:8px;">⚠️ 需要配置 API Key 才能使用 AI 生成功能</p>
+          <button class="btn btn-ghost btn-sm" id="btn-settings-custom">配置 API</button>
+        </div>
+      ` : ''}
+
+      <div class="wizard-actions">
+        <button class="btn btn-ghost" id="btn-back-home">← 返回大厅</button>
+        <button class="btn btn-primary btn-lg" id="btn-next-step2" ${!aiService.isConfigured ? 'disabled' : ''}>
+          下一步 — 剧本设定 →
+        </button>
+      </div>
+    </div>
+  `
+}
+
+// ===== Step 2: 剧本设定 =====
+function renderStep2() {
+  return `
+    <div class="wizard-panel" id="step-2">
+      <div class="setting-group">
+        <div class="setting-group-title">🎨 故事风格</div>
+        <div class="option-chips" data-group="style">
+          ${STYLE_OPTIONS.map(o => `
+            <div class="option-chip ${wizardState.style === o.value ? 'selected' : ''}" data-value="${o.value}" title="${o.desc}">
+              ${o.label}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-group-title">🕰️ 时代背景</div>
+        <div class="option-chips" data-group="era">
+          ${ERA_OPTIONS.map(o => `
+            <div class="option-chip ${wizardState.era === o.value ? 'selected' : ''}" data-value="${o.value}" title="${o.desc}">
+              ${o.label}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-group-title">⭐ 难度等级</div>
+        <div class="option-chips" data-group="difficulty">
+          ${DIFFICULTY_OPTIONS.map(o => `
+            <div class="option-chip ${wizardState.difficulty === o.value ? 'selected' : ''}" data-value="${o.value}">
+              ${o.label}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-group-title">👥 NPC 数量</div>
+        <div class="option-chips" data-group="npcCount">
+          ${NPC_OPTIONS.map(o => `
+            <div class="option-chip ${wizardState.npcCount === o.value ? 'selected' : ''}" data-value="${o.value}">
+              ${o.label}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-group-title">💡 特殊要求（可选）</div>
+        <textarea class="input" id="custom-special" rows="2" placeholder="如：需要有密室诡计、希望凶手是最不可能的人...">${wizardState.specialRequest}</textarea>
+      </div>
+
+      <div class="wizard-actions">
+        <button class="btn btn-ghost" id="btn-prev-step1">← 上一步</button>
+        <button class="btn btn-primary btn-lg" id="btn-generate">🤖 开始生成剧本</button>
+      </div>
+    </div>
+  `
+}
+
+// ===== Step 3: 虚空酝酿 =====
+function renderStep3() {
+  return `
+    <div class="wizard-panel" id="step-3">
+      <div class="generate-stage-container" id="generate-container">
+        <div class="generate-stage-icon" id="stage-icon">${GENERATE_STAGES[0].icon}</div>
+        <div class="generate-stage-text" id="stage-text">${GENERATE_STAGES[0].text}</div>
+        <div class="generate-stage-dots">
+          ${GENERATE_STAGES.map((_, i) => `<div class="generate-stage-dot ${i === 0 ? 'active' : ''}" data-dot="${i}"></div>`).join('')}
+        </div>
+      </div>
+    </div>
+  `
+}
+
+// ===== Step 4: 剧本预览 =====
+function renderStep4() {
+  const s = wizardState.generatedScenario
+  if (!s) return '<div class="generate-error">⚠️ 剧本数据丢失</div>'
+
+  const gradient = s.cover?.gradient || 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)'
+
+  return `
+    <div class="wizard-panel" id="step-4">
+      <div class="preview-card">
+        <div class="preview-card-cover" style="background: ${gradient}">
+          <span class="preview-card-cover-emoji">${s.emoji || '🎭'}</span>
+        </div>
+        <div class="preview-card-body">
+          <div class="preview-card-title" id="preview-title" title="点击编辑">
+            📖 《${s.title}》<span class="edit-icon">✏️</span>
+          </div>
+          <div class="preview-card-brief" id="preview-brief" title="点击编辑">
+            ${s.brief}
+          </div>
+
+          <div class="preview-card-meta">
+            <span class="tag tag-primary">⭐ ${s.difficultyLabel}</span>
+            <span class="tag tag-accent">👤 ${s.playerCount}</span>
+            <span class="tag tag-gold">⏱ ${s.estimatedTime}</span>
+            ${(s.tags || []).map(t => `<span class="tag tag-primary">${t}</span>`).join('')}
+          </div>
+
+          <div class="preview-card-section">
+            <div class="preview-card-section-title">👥 角色阵容</div>
+            <div class="preview-characters">
+              ${(s.npcs || []).map(n => `
+                <div class="preview-character">
+                  <div class="preview-character-emoji">${n.emoji}</div>
+                  <div class="preview-character-name">${n.name}</div>
+                  <div class="preview-character-role">${n.role}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <div class="preview-card-section">
+            <div class="preview-card-section-title">🔍 线索数量: ${(s.clues || []).length} 条</div>
+          </div>
+        </div>
+
+        <div class="preview-card-actions">
+          <button class="btn btn-ghost" id="btn-back-step2" style="flex:1;">← 返回设定</button>
+          <button class="btn btn-secondary" id="btn-regenerate" style="flex:1;">🔄 重新生成</button>
+          <button class="btn btn-primary btn-lg" id="btn-start-game" style="flex:2;">🎮 开始游玩</button>
+        </div>
+      </div>
+    </div>
+  `
+}
+
+// ===== 导航逻辑 =====
+function goToStep(step, direction, router) {
+  wizardState.currentStep = step
+
+  // 更新 stepper
+  const stepperContainer = document.getElementById('wizard-stepper')
+  if (stepperContainer) {
+    stepperContainer.outerHTML = renderStepper(step)
+  }
+
+  // 渲染内容
+  const content = document.getElementById('wizard-content')
+  if (!content) return
+
+  let html = ''
+  switch (step) {
+    case 1: html = renderStep1(); break
+    case 2: html = renderStep2(); break
+    case 3: html = renderStep3(); break
+    case 4: html = renderStep4(); break
+  }
+
+  content.innerHTML = html
+
+  // 反向动画
+  if (direction === 'back') {
+    const panel = content.querySelector('.wizard-panel')
+    if (panel) {
+      panel.classList.remove('wizard-panel')
+      panel.classList.add('wizard-panel-back')
+    }
+  }
+
+  // 绑定事件
+  bindStepEvents(step, router)
+}
+
+function bindStepEvents(step, router) {
+  switch (step) {
+    case 1: bindStep1Events(router); break
+    case 2: bindStep2Events(router); break
+    case 3: startGeneration(router); break
+    case 4: bindStep4Events(router); break
+  }
+}
+
+// ===== Step 1 事件 =====
+function bindStep1Events(router) {
+  // 返回大厅
   document.getElementById('btn-back-home')?.addEventListener('click', () => {
     router.navigate('/')
   })
 
+  // API 设置
   document.getElementById('btn-settings-custom')?.addEventListener('click', () => {
     window.dispatchEvent(new CustomEvent('open:settings'))
   })
 
-  document.getElementById('btn-generate')?.addEventListener('click', async () => {
-    if (generating) return
+  // 主题模板选择
+  document.querySelectorAll('.theme-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const index = parseInt(card.dataset.index)
+      const template = THEME_TEMPLATES[index]
 
+      // 移除其他选中态
+      document.querySelectorAll('.theme-card').forEach(c => c.classList.remove('selected'))
+      card.classList.add('selected')
+
+      wizardState.selectedTemplate = index
+      wizardState.theme = template.name
+
+      const themeInput = document.getElementById('custom-theme')
+      if (themeInput) themeInput.value = template.name
+    })
+  })
+
+  // 下一步
+  document.getElementById('btn-next-step2')?.addEventListener('click', () => {
     const theme = document.getElementById('custom-theme')?.value?.trim()
     if (!theme) {
-      alert('请输入剧本主题')
+      showToast('⚠️ 请选择或输入主题')
       return
     }
 
-    const desc = document.getElementById('custom-desc')?.value?.trim() || ''
-    const difficulty = parseInt(document.getElementById('custom-difficulty')?.value || '3')
-    const npcCount = parseInt(document.getElementById('custom-npc-count')?.value || '4')
+    wizardState.theme = theme
+    wizardState.description = document.getElementById('custom-desc')?.value?.trim() || ''
 
-    generating = true
-    const statusEl = document.getElementById('generate-status')
-    const generateBtn = document.getElementById('btn-generate')
-    if (statusEl) statusEl.style.display = 'block'
-    if (generateBtn) generateBtn.disabled = true
-
-    try {
-      const scenario = await generateScenario(theme, desc, difficulty, npcCount)
-      if (scenario) {
-        addCustomScenario(scenario)
-        sessionStorage.setItem('miju-selected-scenario', scenario.id)
-        router.navigate('/intro')
-      }
-    } catch (e) {
-      const textEl = document.getElementById('generate-text')
-      if (textEl) textEl.textContent = `⚠️ 生成失败：${e.message}`
-      if (generateBtn) generateBtn.disabled = false
-      generating = false
-    }
+    goToStep(2, 'forward', router)
   })
 }
 
-const difficultyLabels = { 2: '入门', 3: '进阶', 4: '困难', 5: '大师' }
+// ===== Step 2 事件 =====
+function bindStep2Events(router) {
+  // 选项胶囊点击
+  document.querySelectorAll('.option-chips').forEach(group => {
+    const groupName = group.dataset.group
+    group.querySelectorAll('.option-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        // 在组内取消其他选中
+        group.querySelectorAll('.option-chip').forEach(c => c.classList.remove('selected'))
+        chip.classList.add('selected')
 
-async function generateScenario(theme, desc, difficulty, npcCount) {
+        const value = chip.dataset.value
+        if (groupName === 'difficulty' || groupName === 'npcCount') {
+          wizardState[groupName] = parseInt(value)
+        } else {
+          wizardState[groupName] = value
+        }
+      })
+    })
+  })
+
+  // 上一步
+  document.getElementById('btn-prev-step1')?.addEventListener('click', () => {
+    goToStep(1, 'back', router)
+  })
+
+  // 生成
+  document.getElementById('btn-generate')?.addEventListener('click', () => {
+    wizardState.specialRequest = document.getElementById('custom-special')?.value?.trim() || ''
+    goToStep(3, 'forward', router)
+  })
+}
+
+// ===== Step 3: 生成逻辑 =====
+async function startGeneration(router) {
+  let stageIndex = 0
+
+  // 阶段播报
+  generateTimer = setInterval(() => {
+    stageIndex++
+    if (stageIndex >= GENERATE_STAGES.length) {
+      clearInterval(generateTimer)
+      generateTimer = null
+      return
+    }
+
+    const iconEl = document.getElementById('stage-icon')
+    const textEl = document.getElementById('stage-text')
+    if (iconEl) iconEl.textContent = GENERATE_STAGES[stageIndex].icon
+    if (textEl) {
+      textEl.textContent = GENERATE_STAGES[stageIndex].text
+      textEl.style.animation = 'none'
+      textEl.offsetHeight // reflow
+      textEl.style.animation = ''
+    }
+
+    // 更新进度点
+    document.querySelectorAll('.generate-stage-dot').forEach((dot, i) => {
+      dot.classList.toggle('active', i <= stageIndex)
+    })
+  }, 3000)
+
+  try {
+    const scenario = await generateScenario(
+      wizardState.theme,
+      wizardState.description,
+      wizardState.difficulty,
+      wizardState.npcCount,
+      wizardState.style,
+      wizardState.era,
+      wizardState.specialRequest
+    )
+
+    if (generateTimer) {
+      clearInterval(generateTimer)
+      generateTimer = null
+    }
+
+    if (scenario) {
+      wizardState.generatedScenario = scenario
+      goToStep(4, 'forward', router)
+    }
+  } catch (e) {
+    if (generateTimer) {
+      clearInterval(generateTimer)
+      generateTimer = null
+    }
+
+    const container = document.getElementById('generate-container')
+    if (container) {
+      container.innerHTML = `
+        <div class="generate-error">
+          <div style="font-size:3rem;margin-bottom:16px;">⚠️</div>
+          <p style="margin-bottom:16px;">生成失败：${e.message}</p>
+          <button class="btn btn-primary" id="btn-retry-generate">🔄 重试</button>
+        </div>
+      `
+      document.getElementById('btn-retry-generate')?.addEventListener('click', () => {
+        goToStep(3, 'forward', router)
+      })
+    }
+  }
+}
+
+// ===== Step 4 事件 =====
+function bindStep4Events(router) {
+  const scenario = wizardState.generatedScenario
+  if (!scenario) return
+
+  // 标题编辑
+  document.getElementById('preview-title')?.addEventListener('click', () => {
+    const el = document.getElementById('preview-title')
+    const current = scenario.title
+    el.innerHTML = `<input class="inline-edit-input title-edit" id="edit-title-input" value="${current}" />`
+    const input = document.getElementById('edit-title-input')
+    input.focus()
+    input.select()
+
+    const finish = () => {
+      const newVal = input.value.trim() || current
+      scenario.title = newVal
+      el.innerHTML = `📖 《${newVal}》<span class="edit-icon">✏️</span>`
+    }
+    input.addEventListener('blur', finish)
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur() })
+  })
+
+  // 简介编辑
+  document.getElementById('preview-brief')?.addEventListener('click', () => {
+    const el = document.getElementById('preview-brief')
+    const current = scenario.brief
+    el.innerHTML = `<textarea class="inline-edit-input brief-edit" id="edit-brief-input">${current}</textarea>`
+    const input = document.getElementById('edit-brief-input')
+    input.focus()
+
+    const finish = () => {
+      const newVal = input.value.trim() || current
+      scenario.brief = newVal
+      el.textContent = newVal
+    }
+    input.addEventListener('blur', finish)
+  })
+
+  // 返回设定
+  document.getElementById('btn-back-step2')?.addEventListener('click', () => {
+    goToStep(2, 'back', router)
+  })
+
+  // 重新生成
+  document.getElementById('btn-regenerate')?.addEventListener('click', () => {
+    wizardState.generatedScenario = null
+    goToStep(3, 'forward', router)
+  })
+
+  // 开始游玩
+  document.getElementById('btn-start-game')?.addEventListener('click', () => {
+    addCustomScenario(scenario)
+    sessionStorage.setItem('miju-selected-scenario', scenario.id)
+    router.navigate('/intro')
+  })
+}
+
+// ===== 初始化 =====
+export function initCustom(router) {
+  resetState()
+  bindStep1Events(router)
+}
+
+// ===== AI 生成 =====
+async function generateScenario(theme, desc, difficulty, npcCount, style, era, specialRequest) {
   const prompt = `你是一个专业的剧本杀编剧。请根据以下要求生成一个完整的推理解谜剧本。
 
 ## 要求
 - 主题：${theme}
 - 补充描述：${desc || '无'}
+- 故事风格：${style || '不限'}
+- 时代背景：${era || '不限'}
 - 难度：${difficultyLabels[difficulty]}
 - NPC数量：${npcCount}人
+- 特殊要求：${specialRequest || '无'}
 
 ## 输出格式（必须是合法的JSON）
 
@@ -220,4 +661,26 @@ async function generateScenario(theme, desc, difficulty, npcCount) {
     truthReveal: data.truthReveal,
     isCustom: true
   }
+}
+
+// ===== Toast 提示 =====
+function showToast(message, duration = 2500) {
+  // 移除已存在的 toast
+  document.querySelector('.custom-toast')?.remove()
+
+  const toast = document.createElement('div')
+  toast.className = 'custom-toast'
+  toast.textContent = message
+  document.body.appendChild(toast)
+
+  // 入场动画
+  requestAnimationFrame(() => {
+    toast.classList.add('show')
+  })
+
+  // 自动消失
+  setTimeout(() => {
+    toast.classList.remove('show')
+    toast.addEventListener('transitionend', () => toast.remove())
+  }, duration)
 }

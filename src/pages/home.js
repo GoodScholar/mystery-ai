@@ -2,7 +2,7 @@
  * 首页 — 剧本大厅
  */
 
-import { getAllScenarios } from '../scenarios/scenario-registry.js'
+import { getAllScenarios, removeCustomScenario } from '../scenarios/scenario-registry.js'
 
 export function renderHome() {
   const scenarios = getAllScenarios()
@@ -22,6 +22,7 @@ export function renderHome() {
         <div class="scenario-grid">
           ${scenarios.map(s => `
             <div class="card scenario-card" data-scenario="${s.id}" id="scenario-${s.id}">
+              ${s.isCustom ? `<button class="scenario-delete-btn" data-delete-id="${s.id}" title="删除此剧本">🗑️</button>` : ''}
               <div class="scenario-card-cover" style="background: ${s.cover.gradient}">
                 <span style="font-size: 5rem; position: relative; z-index: 1;">${s.cover.emoji}</span>
               </div>
@@ -69,11 +70,28 @@ export function renderHome() {
 export function initHome(router) {
   // 剧本卡片点击
   document.querySelectorAll('.scenario-card:not(.scenario-card-create)').forEach(card => {
-    card.addEventListener('click', () => {
+    card.addEventListener('click', (e) => {
+      // 如果点击的是删除按钮，不触发卡片跳转
+      if (e.target.closest('.scenario-delete-btn')) return
+
       const scenarioId = card.dataset.scenario
-      // 将选中的剧本 ID 存入 sessionStorage 供 intro 页面使用
       sessionStorage.setItem('miju-selected-scenario', scenarioId)
       router.navigate('/intro')
+    })
+  })
+
+  // 删除按钮
+  document.querySelectorAll('.scenario-delete-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation()
+      const deleteId = btn.dataset.deleteId
+      const card = btn.closest('.scenario-card')
+      const title = card?.querySelector('.scenario-card-title')?.textContent?.trim() || '此剧本'
+
+      showDeleteConfirm(title, () => {
+        removeCustomScenario(deleteId)
+        router.resolve() // 重新渲染页面
+      })
     })
   })
 
@@ -85,5 +103,38 @@ export function initHome(router) {
   // 设置按钮
   document.getElementById('btn-settings')?.addEventListener('click', () => {
     window.dispatchEvent(new CustomEvent('open:settings'))
+  })
+}
+
+/** 删除确认弹窗 */
+function showDeleteConfirm(title, onConfirm) {
+  const overlay = document.createElement('div')
+  overlay.className = 'overlay'
+  overlay.innerHTML = `
+    <div class="modal confirm-dialog">
+      <div class="confirm-dialog-title">⚠️ 确认删除</div>
+      <div class="confirm-dialog-text">确定删除「${title}」？<br>此操作不可恢复。</div>
+      <div style="display:flex;gap:12px;">
+        <button class="btn btn-ghost" id="confirm-cancel" style="flex:1;">取消</button>
+        <button class="btn btn-primary" id="confirm-delete" style="flex:1;background:linear-gradient(135deg,#f87171,#ef4444);">删除</button>
+      </div>
+    </div>
+  `
+
+  document.body.appendChild(overlay)
+
+  const close = () => {
+    overlay.style.opacity = '0'
+    setTimeout(() => overlay.remove(), 200)
+  }
+
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) close()
+  })
+
+  document.getElementById('confirm-cancel')?.addEventListener('click', close)
+  document.getElementById('confirm-delete')?.addEventListener('click', () => {
+    close()
+    onConfirm()
   })
 }

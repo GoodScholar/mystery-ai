@@ -10,8 +10,8 @@ const API_MODEL_STORAGE = 'miju-ai-api-model'
 export class AIService {
   constructor() {
     this.apiKey = localStorage.getItem(API_KEY_STORAGE) || import.meta.env.VITE_API_KEY || ''
-    this.apiBase = localStorage.getItem(API_BASE_STORAGE) || import.meta.env.VITE_API_BASE || 'https://generativelanguage.googleapis.com/v1beta/openai'
-    this.model = localStorage.getItem(API_MODEL_STORAGE) || import.meta.env.VITE_API_MODEL || 'gemini-2.0-flash'
+    this.apiBase = localStorage.getItem(API_BASE_STORAGE) || import.meta.env.VITE_API_BASE || 'https://api.deepseek.com/v1'
+    this.model = localStorage.getItem(API_MODEL_STORAGE) || import.meta.env.VITE_API_MODEL || 'deepseek-chat'
   }
 
   /** 是否配置了 API Key */
@@ -22,8 +22,8 @@ export class AIService {
   /** 保存设置 */
   saveSettings(apiKey, apiBase, model) {
     this.apiKey = apiKey
-    this.apiBase = apiBase || 'https://generativelanguage.googleapis.com/v1beta/openai'
-    this.model = model || 'gemini-2.0-flash'
+    this.apiBase = apiBase || 'https://api.deepseek.com/v1'
+    this.model = model || 'deepseek-chat'
     localStorage.setItem(API_KEY_STORAGE, apiKey)
     localStorage.setItem(API_BASE_STORAGE, this.apiBase)
     localStorage.setItem(API_MODEL_STORAGE, this.model)
