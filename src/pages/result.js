@@ -2,10 +2,16 @@
  * 结果页 — 评分展示 + 真相揭秘
  */
 
-import { midnightGallery } from '../scenarios/midnight-gallery.js'
+import { getScenario } from '../scenarios/scenario-registry.js'
 import { gameState } from '../game/state.js'
 
-const scenario = midnightGallery
+let scenario = null
+
+function loadScenario() {
+  const state = gameState.get()
+  scenario = getScenario(state.scenarioId)
+  return scenario
+}
 
 function getGrade(total) {
   if (total >= 95) return { grade: 'S', class: 'grade-s', label: '完美推理' }
@@ -16,6 +22,8 @@ function getGrade(total) {
 }
 
 export function renderResult() {
+  if (!loadScenario()) return `<div class="page" style="text-align:center;padding:60px 20px;"><p>未找到剧本，<a href="#/">返回大厅</a></p></div>`
+
   const state = gameState.get()
   const score = state.score || { suspect: 0, motive: 0, method: 0, efficiency: 0, total: 0 }
   const gradeInfo = getGrade(score.total)
@@ -98,6 +106,11 @@ export function initResult(router) {
   const state = gameState.get()
 
   if (!state.submitted) {
+    router.navigate('/')
+    return
+  }
+
+  if (!loadScenario()) {
     router.navigate('/')
     return
   }

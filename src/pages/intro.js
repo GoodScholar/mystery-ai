@@ -2,15 +2,17 @@
  * 开场页 — 剧本背景介绍 + 角色展示
  */
 
-import { midnightGallery } from '../scenarios/midnight-gallery.js'
+import { getScenario } from '../scenarios/scenario-registry.js'
 import { gameState } from '../game/state.js'
 
-function getScenario() {
-  return midnightGallery
+function getSelectedScenario() {
+  const id = sessionStorage.getItem('miju-selected-scenario')
+  return id ? getScenario(id) : null
 }
 
 export function renderIntro() {
-  const scenario = getScenario()
+  const scenario = getSelectedScenario()
+  if (!scenario) return `<div class="page" style="text-align:center;padding:60px 20px;"><p>未找到剧本，<a href="#/">返回大厅</a></p></div>`
 
   return `
     <div class="intro page">
@@ -59,7 +61,8 @@ export function renderIntro() {
 }
 
 export function initIntro(router) {
-  const scenario = getScenario()
+  const scenario = getSelectedScenario()
+  if (!scenario) return
 
   // 打字机效果
   typeWriter(document.getElementById('story-text'), scenario.intro, 30)

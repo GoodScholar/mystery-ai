@@ -2,16 +2,24 @@
  * 游戏核心页面 — NPC 对话 + 线索收集
  */
 
-import { midnightGallery } from '../scenarios/midnight-gallery.js'
+import { getScenario } from '../scenarios/scenario-registry.js'
 import { gameState } from '../game/state.js'
 import { aiService } from '../game/ai-service.js'
 import { extractClue } from '../game/clue-extractor.js'
 
-let scenario = midnightGallery
+let scenario = null
 let mockResponseIndexes = {}
 let cluePanel = false
 
+function loadScenario() {
+  const state = gameState.get()
+  scenario = getScenario(state.scenarioId)
+  return scenario
+}
+
 export function renderGame() {
+  if (!loadScenario()) return `<div class="page" style="text-align:center;padding:60px 20px;"><p>未找到剧本，<a href="#/">返回大厅</a></p></div>`
+
   const state = gameState.get()
   const activeNpc = scenario.npcs.find(n => n.id === state.activeNpcId) || scenario.npcs[0]
   const remaining = gameState.getRemainingRounds()
@@ -151,6 +159,11 @@ export function initGame(router) {
 
   // 如果没有游戏数据，跳回首页
   if (!state.scenarioId || state.phase !== 'playing') {
+    router.navigate('/')
+    return
+  }
+
+  if (!loadScenario()) {
     router.navigate('/')
     return
   }

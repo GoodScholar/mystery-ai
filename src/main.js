@@ -9,6 +9,7 @@ import { renderIntro, initIntro } from './pages/intro.js'
 import { renderGame, initGame } from './pages/game.js'
 import { renderDeduction, initDeduction } from './pages/deduction.js'
 import { renderResult, initResult } from './pages/result.js'
+import { renderCustom, initCustom } from './pages/custom-scenario.js'
 import { aiService } from './game/ai-service.js'
 
 // 初始化路由
@@ -22,6 +23,7 @@ router
   .on('/game', () => renderGame())
   .on('/deduction', () => renderDeduction())
   .on('/result', () => renderResult())
+  .on('/custom', () => renderCustom())
 
 // 页面加载后初始化
 window.addEventListener('page:mounted', (e) => {
@@ -32,6 +34,7 @@ window.addEventListener('page:mounted', (e) => {
     case '/game': initGame(router); break
     case '/deduction': initDeduction(router); break
     case '/result': initResult(router); break
+    case '/custom': initCustom(router); break
   }
 })
 
@@ -56,19 +59,19 @@ function showSettingsModal() {
       <div class="settings-group">
         <label class="settings-label">API Key</label>
         <input class="input" id="settings-key" type="password" placeholder="sk-..." value="${settings.apiKey}" />
-        <p class="settings-hint">支持 OpenAI / Claude / 任何兼容 API</p>
+        <p class="settings-hint">支持 OpenAI / Gemini / 任何兼容 API</p>
       </div>
 
       <div class="settings-group">
         <label class="settings-label">API Base URL</label>
-        <input class="input" id="settings-base" type="text" placeholder="https://api.openai.com/v1" value="${settings.apiBase}" />
+        <input class="input" id="settings-base" type="text" placeholder="https://generativelanguage.googleapis.com/v1beta/openai" value="${settings.apiBase}" />
         <p class="settings-hint">兼容 OpenAI 格式的 API 地址</p>
       </div>
 
       <div class="settings-group">
         <label class="settings-label">模型名称</label>
-        <input class="input" id="settings-model" type="text" placeholder="gpt-4o-mini" value="${settings.model}" />
-        <p class="settings-hint">推荐：gpt-4o-mini（性价比高）或 gpt-4o（效果好）</p>
+        <input class="input" id="settings-model" type="text" placeholder="gemini-2.0-flash" value="${settings.model}" />
+        <p class="settings-hint">推荐：gemini-2.0-flash（免费）或 gpt-4o-mini</p>
       </div>
 
       <div style="display:flex;gap:12px;margin-top:24px;">

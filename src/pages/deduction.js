@@ -2,13 +2,21 @@
  * 推理提交页 — 选择凶手、填写动机和手法
  */
 
-import { midnightGallery } from '../scenarios/midnight-gallery.js'
+import { getScenario } from '../scenarios/scenario-registry.js'
 import { gameState } from '../game/state.js'
 
-const scenario = midnightGallery
+let scenario = null
 let selectedSuspect = null
 
+function loadScenario() {
+  const state = gameState.get()
+  scenario = getScenario(state.scenarioId)
+  return scenario
+}
+
 export function renderDeduction() {
+  if (!loadScenario()) return `<div class="page" style="text-align:center;padding:60px 20px;"><p>未找到剧本，<a href="#/">返回大厅</a></p></div>`
+
   const state = gameState.get()
 
   return `
@@ -98,6 +106,11 @@ export function initDeduction(router) {
     return
   }
 
+  if (!loadScenario()) {
+    router.navigate('/')
+    return
+  }
+
   // 嫌疑人选择
   document.querySelectorAll('.deduction-option').forEach(option => {
     option.addEventListener('click', () => {
@@ -160,15 +173,19 @@ function calculateScore(suspect, motive, method) {
     suspectScore = 40
   }
 
-  // 动机评分（30分）— 关键词匹配
-  const motiveKeywords = ['赝品', '假画', '2000万', '退款', '拒绝', '嘲笑', '愤怒', '暗涌']
-  const motiveMatches = motiveKeywords.filter(kw => motive.includes(kw)).length
-  motiveScore = Math.min(30, Math.round((motiveMatches / 3) * 30))
+  // 动机评分（30分）— 通用关键词匹配
+  const motiveKeywords = answer.motiveKeywords || []
+  if (motiveKeywords.length > 0) {
+    const motiveMatches = motiveKeywords.filter(kw => motive.includes(kw)).length
+    motiveScore = Math.min(30, Math.round((motiveMatches / 3) * 30))
+  }
 
-  // 手法评分（30分）— 关键词匹配
-  const methodKeywords = ['钢丝', '勒', '通风', '管道', '密室', '反锁', '监控', '删除', '保安', '收买']
-  const methodMatches = methodKeywords.filter(kw => method.includes(kw)).length
-  methodScore = Math.min(30, Math.round((methodMatches / 3) * 30))
+  // 手法评分（30分）— 通用关键词匹配
+  const methodKeywords = answer.methodKeywords || []
+  if (methodKeywords.length > 0) {
+    const methodMatches = methodKeywords.filter(kw => method.includes(kw)).length
+    methodScore = Math.min(30, Math.round((methodMatches / 3) * 30))
+  }
 
   // 效率加分
   const remaining = gameState.getRemainingRounds()

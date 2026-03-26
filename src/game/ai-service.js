@@ -57,38 +57,52 @@ export class AIService {
       { role: 'user', content: userMessage }
     ]
 
-    try {
-      const response = await fetch(`${this.apiBase}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
-        },
-        body: JSON.stringify({
-          model: this.model,
-          messages,
-          max_tokens: 500,
-          temperature: 0.8,
-          stream: !!onChunk
+    const maxRetries = 3
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await fetch(`${this.apiBase}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.apiKey}`
+          },
+          body: JSON.stringify({
+            model: this.model,
+            messages,
+            max_tokens: 500,
+            temperature: 0.8,
+            stream: !!onChunk
+          })
         })
-      })
 
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}))
-        throw new Error(err.error?.message || `API 错误: ${response.status}`)
-      }
+        // 429 频率限制 → 自动重试
+        if (response.status === 429 && attempt < maxRetries) {
+          const waitSec = Math.pow(2, attempt + 1) // 2s, 4s, 8s
+          console.warn(`API 频率限制，${waitSec}秒后重试 (${attempt + 1}/${maxRetries})...`)
+          if (onChunk) onChunk(`\n⏳ 请求过快，${waitSec}秒后自动重试...\n`, '')
+          await new Promise(r => setTimeout(r, waitSec * 1000))
+          continue
+        }
 
-      if (onChunk) {
-        return await this._readStream(response, onChunk)
-      } else {
-        const data = await response.json()
-        return data.choices[0].message.content
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}))
+          throw new Error(err.error?.message || `API 错误: ${response.status}`)
+        }
+
+        if (onChunk) {
+          return await this._readStream(response, onChunk)
+        } else {
+          const data = await response.json()
+          return data.choices[0].message.content
+        }
+      } catch (e) {
+        if (e.message.includes('Failed to fetch')) {
+          throw new Error('网络连接失败，请检查 API 地址是否正确')
+        }
+        if (attempt === maxRetries) throw e
+        throw e
       }
-    } catch (e) {
-      if (e.message.includes('Failed to fetch')) {
-        throw new Error('网络连接失败，请检查 API 地址是否正确')
-      }
-      throw e
     }
   }
 
