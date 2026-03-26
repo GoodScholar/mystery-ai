@@ -24,11 +24,19 @@ export async function extractClue(npcId, npcReply, userMessage, scenario) {
 
   if (remainingClues.length === 0) return null
 
-  // 如果有 AI 服务，使用 AI 提取
+  // 如果有 AI 服务，使用 AI 提取（增加超时控制）
   if (aiService.isConfigured) {
     try {
       const conversationText = `玩家: ${userMessage}\n${scenario.npcs.find(n => n.id === npcId)?.name}: ${npcReply}`
-      const result = await aiService.extractClue(conversationText, remainingClues, foundClueIds)
+
+      // 5 秒超时，超时后降级为关键词匹配
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('线索提取超时')), 5000)
+      )
+      const result = await Promise.race([
+        aiService.extractClue(conversationText, remainingClues, foundClueIds),
+        timeoutPromise
+      ])
 
       if (result.triggered && result.clue_id) {
         const clue = scenario.clues.find(c => c.id === result.clue_id)

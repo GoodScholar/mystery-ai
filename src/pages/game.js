@@ -246,12 +246,27 @@ async function sendMessage(input, router) {
     let reply
 
     if (aiService.isConfigured) {
-      // AI 模式
+      // AI 模式 — 流式输出
       const history = gameState.getConversation(npcId).slice(0, -1) // 不含刚添加的用户消息
+      // Token 截断：只发送最近 20 条对话给 AI
+      const trimmedHistory = history.slice(-20).map(m => ({ role: m.role, content: m.content }))
+
+      // 预先创建 NPC 回复气泡用于流式填充
+      hideTypingIndicator()
+      const replyBubble = createEmptyReplyBubble(npc)
+
       reply = await aiService.chat(
         npc.systemPrompt,
-        history.map(m => ({ role: m.role, content: m.content })),
-        text
+        trimmedHistory,
+        text,
+        // 流式回调：逐字更新气泡内容
+        (chunk, fullText) => {
+          const bubble = replyBubble.querySelector('.chat-msg-bubble')
+          if (bubble) {
+            bubble.innerHTML = escapeHtml(fullText)
+          }
+          scrollChatToBottom()
+        }
       )
     } else {
       // Mock 模式
@@ -265,7 +280,10 @@ async function sendMessage(input, router) {
     // 添加 NPC 回复
     hideTypingIndicator()
     gameState.addMessage(npcId, 'assistant', reply)
-    appendMessage('assistant', reply, npc)
+    // 流式模式已实时填充气泡，Mock 模式需要追加
+    if (!aiService.isConfigured) {
+      appendMessage('assistant', reply, npc)
+    }
 
     // 线索提取
     const clue = await extractClue(npcId, reply, text, scenario)
@@ -311,6 +329,22 @@ function appendMessage(role, content, npc) {
 
   container.appendChild(div)
   scrollChatToBottom()
+}
+
+/** 创建空的 NPC 回复气泡（用于流式填充） */
+function createEmptyReplyBubble(npc) {
+  const container = document.getElementById('chat-messages')
+  if (!container) return null
+
+  const div = document.createElement('div')
+  div.className = 'chat-msg chat-msg-npc'
+  div.innerHTML = `
+    <div class="chat-msg-sender">${npc?.emoji || '🤖'} ${npc?.name || 'NPC'}</div>
+    <div class="chat-msg-bubble"></div>
+  `
+  container.appendChild(div)
+  scrollChatToBottom()
+  return div
 }
 
 function appendSystemMessage(text) {

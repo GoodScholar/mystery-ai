@@ -113,13 +113,16 @@ function showDeleteConfirm(title, onConfirm) {
   overlay.innerHTML = `
     <div class="modal confirm-dialog">
       <div class="confirm-dialog-title">⚠️ 确认删除</div>
-      <div class="confirm-dialog-text">确定删除「${title}」？<br>此操作不可恢复。</div>
+      <div class="confirm-dialog-text" id="confirm-text"></div>
       <div style="display:flex;gap:12px;">
         <button class="btn btn-ghost" id="confirm-cancel" style="flex:1;">取消</button>
         <button class="btn btn-primary" id="confirm-delete" style="flex:1;background:linear-gradient(135deg,#f87171,#ef4444);">删除</button>
       </div>
     </div>
   `
+
+  // 安全地设置文本内容，防止 XSS
+  overlay.querySelector('#confirm-text').textContent = `确定删除「${title}」？此操作不可恢复。`
 
   document.body.appendChild(overlay)
 

@@ -47,6 +47,10 @@ window.addEventListener('open:settings', () => {
 router.start()
 
 // ===== Settings Modal =====
+function escapeAttr(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+}
+
 function showSettingsModal() {
   const settings = aiService.getSettings()
 
@@ -58,19 +62,19 @@ function showSettingsModal() {
 
       <div class="settings-group">
         <label class="settings-label">API Key</label>
-        <input class="input" id="settings-key" type="password" placeholder="sk-..." value="${settings.apiKey}" />
+        <input class="input" id="settings-key" type="password" placeholder="sk-..." value="${escapeAttr(settings.apiKey)}" />
         <p class="settings-hint">支持 OpenAI / Gemini / 任何兼容 API</p>
       </div>
 
       <div class="settings-group">
         <label class="settings-label">API Base URL</label>
-        <input class="input" id="settings-base" type="text" placeholder="https://generativelanguage.googleapis.com/v1beta/openai" value="${settings.apiBase}" />
+        <input class="input" id="settings-base" type="text" placeholder="https://generativelanguage.googleapis.com/v1beta/openai" value="${escapeAttr(settings.apiBase)}" />
         <p class="settings-hint">兼容 OpenAI 格式的 API 地址</p>
       </div>
 
       <div class="settings-group">
         <label class="settings-label">模型名称</label>
-        <input class="input" id="settings-model" type="text" placeholder="gemini-2.0-flash" value="${settings.model}" />
+        <input class="input" id="settings-model" type="text" placeholder="gemini-2.0-flash" value="${escapeAttr(settings.model)}" />
         <p class="settings-hint">推荐：gemini-2.0-flash（免费）或 gpt-4o-mini</p>
       </div>
 

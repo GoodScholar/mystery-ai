@@ -424,6 +424,15 @@ function bindStep2Events(router) {
 
   // 生成
   document.getElementById('btn-generate')?.addEventListener('click', () => {
+    // 验证必选项
+    if (!wizardState.style) {
+      showToast('⚠️ 请选择故事风格')
+      return
+    }
+    if (!wizardState.era) {
+      showToast('⚠️ 请选择时代背景')
+      return
+    }
     wizardState.specialRequest = document.getElementById('custom-special')?.value?.trim() || ''
     goToStep(3, 'forward', router)
   })
@@ -627,15 +636,30 @@ async function generateScenario(theme, desc, difficulty, npcCount, style, era, s
 4. systemPrompt 要详细，包含角色该说什么和不该说什么
 5. 凶手的 systemPrompt 中要明确他绝不直接承认，但会露出破绽`
 
-  const response = await aiService.chat(
-    '你是一个专业的JSON生成器。只返回合法的JSON对象，不要包含任何其他文字、代码块标记或解释。',
-    [],
-    prompt
-  )
+  // 最多尝试 2 次（首次 + 1 次重试）
+  let data = null
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const response = await aiService.chat(
+      '你是一个专业的JSON生成器。只返回合法的JSON对象，不要包含任何其他文字、代码块标记或解释。',
+      [],
+      attempt === 0 ? prompt : prompt + '\n\n注意：上次你的回复不是合法JSON，请确保这次只返回纯JSON对象，不要包含任何markdown标记。'
+    )
 
-  // 解析 JSON
-  const cleaned = response.replace(/```json?\n?/g, '').replace(/```/g, '').trim()
-  const data = JSON.parse(cleaned)
+    // 解析 JSON
+    const cleaned = response.replace(/```json?\n?/g, '').replace(/```/g, '').trim()
+    try {
+      data = JSON.parse(cleaned)
+      break // 解析成功，退出重试
+    } catch (e) {
+      if (attempt === 0) {
+        console.warn('JSON 解析失败，正在重试...', e.message)
+        continue
+      }
+      throw new Error('AI 返回的数据格式无法解析，请重试')
+    }
+  }
+
+  if (!data) throw new Error('剧本生成失败，请重试')
 
   // 构建完整剧本对象
   return {

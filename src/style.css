@@ -24,7 +24,7 @@
   /* 文字 */
   --color-text: #e8e8f0;
   --color-text-secondary: #9898b0;
-  --color-text-muted: #6868880;
+  --color-text-muted: #686888;
   --color-text-highlight: #fff;
 
   /* 字体 */
@@ -1147,7 +1147,17 @@ textarea.input {
   }
 
   .npc-sidebar-title { display: none; }
-  .npc-sidebar-actions { display: none; }
+  .npc-sidebar-actions {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 40;
+    background: var(--color-bg-elevated);
+    border-top: 1px solid var(--color-border);
+    flex-direction: row;
+    padding: var(--space-sm) var(--space-md);
+  }
 
   .chat-msg { max-width: 90%; }
 
