@@ -48,6 +48,12 @@ export function renderResult() {
         <div class="result-grade ${gradeInfo.class}">${gradeInfo.grade}</div>
         <div style="font-weight:600;margin-bottom:8px;color:var(--color-text-highlight);">${gradeInfo.label}</div>
 
+        ${score.comments ? `
+          <div style="margin-top: 16px; margin-bottom: 16px; padding: 12px; background: rgba(99,102,241,0.1); border-left: 4px solid var(--color-primary); border-radius: 0 8px 8px 0; font-size: 0.95rem; font-style: italic; color: var(--color-text-primary);">
+            💬 AI 裁判寄语："${score.comments}"
+          </div>
+        ` : ''}
+
         <!-- 分数明细 -->
         <div class="result-detail">
           <div class="result-detail-row">

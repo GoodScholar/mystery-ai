@@ -4,6 +4,7 @@
 
 import { getScenario } from '../scenarios/scenario-registry.js'
 import { gameState } from '../game/state.js'
+import { aiService } from '../game/ai-service.js'
 
 let scenario = null
 let selectedSuspect = null
@@ -131,14 +132,32 @@ export function initDeduction(router) {
   })
 
   // 提交
-  document.getElementById('btn-submit')?.addEventListener('click', () => {
+  document.getElementById('btn-submit')?.addEventListener('click', async () => {
     if (!selectedSuspect) return
+
+    const btn = document.getElementById('btn-submit')
+    btn.disabled = true
+    btn.textContent = '🧠 AI 裁判阅卷中...'
 
     const motive = document.getElementById('motive-input')?.value?.trim() || ''
     const method = document.getElementById('method-input')?.value?.trim() || ''
 
-    // 计算分数
-    const score = calculateScore(selectedSuspect, motive, method)
+    // 计算基础分数 (作为兜底)
+    let score = calculateScore(selectedSuspect, motive, method)
+
+    // AI 语义评分
+    const aiScore = await aiService.scoreDeduction(scenario, {
+      suspect: scenario.npcs.find(n => n.id === selectedSuspect)?.name || selectedSuspect,
+      motive,
+      method
+    })
+
+    if (aiScore) {
+      score.motive = aiScore.motiveScore || 0
+      score.method = aiScore.methodScore || 0
+      score.comments = aiScore.comments
+      score.total = score.suspect + score.motive + score.method + score.efficiency
+    }
 
     gameState.submitDeduction({
       suspect: selectedSuspect,
