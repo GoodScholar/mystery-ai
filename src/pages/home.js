@@ -3,6 +3,7 @@
  */
 
 import { getAllScenarios, removeCustomScenario } from '../scenarios/scenario-registry.js'
+import { gameState } from '../game/state.js'
 
 export function renderHome() {
   const scenarios = getAllScenarios()
@@ -18,6 +19,25 @@ export function renderHome() {
             沉浸式 AI 剧本杀推理游戏 —— 与 AI 角色自由对话，收集线索，破解迷局
           </p>
         </div>
+
+        ${(() => {
+          const saves = gameState.getSaves()
+          const latestActive = saves.find(s => s.phase === 'playing')
+          if (!latestActive) return ''
+          return `
+            <div class="card" id="btn-continue-game" data-save="${latestActive.id}" style="margin-bottom: 24px; display: flex; align-items: center; padding: 16px 24px; cursor: pointer; border-color: var(--color-primary); background: rgba(99,102,241,0.1);">
+              <div style="font-size: 2.5rem; margin-right: 16px;">${latestActive.scenarioEmoji}</div>
+              <div style="flex: 1;">
+                <div style="font-size: 0.85rem; color: var(--color-primary); font-weight: 600; margin-bottom: 4px;">▶ 继续上次的游戏</div>
+                <h3 style="margin:0; font-size: 1.2rem;">${latestActive.scenarioTitle}</h3>
+              </div>
+              <div style="text-align: right;">
+                <div style="font-size: 0.8rem; color: var(--color-text-secondary);">已完成回合</div>
+                <div style="font-weight: 600;">${latestActive.progress}</div>
+              </div>
+            </div>
+          `
+        })()}
 
         <div class="scenario-grid">
           ${scenarios.map(s => `
@@ -78,6 +98,14 @@ export function initHome(router) {
       sessionStorage.setItem('miju-selected-scenario', scenarioId)
       router.navigate('/intro')
     })
+  })
+
+  // 继续最近的游戏
+  document.getElementById('btn-continue-game')?.addEventListener('click', (e) => {
+    const saveId = e.currentTarget.dataset.save
+    if (gameState.loadSave(saveId)) {
+      router.navigate('/game')
+    }
   })
 
   // 删除按钮

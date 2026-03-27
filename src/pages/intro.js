@@ -69,9 +69,19 @@ export function initIntro(router) {
 
   // 开始游戏
   document.getElementById('btn-start-game')?.addEventListener('click', () => {
-    gameState.startGame(scenario.id, scenario.maxRounds)
-    gameState.switchNpc(scenario.npcs[0].id)
-    router.navigate('/game')
+    const activeSaves = gameState.getSaves().filter(s => s.scenarioId === scenario.id && s.phase === 'playing')
+    
+    if (activeSaves.length > 0) {
+      showOverwriteConfirm(() => {
+        gameState.startGame(scenario.id, scenario.maxRounds)
+        gameState.switchNpc(scenario.npcs[0].id)
+        router.navigate('/game')
+      })
+    } else {
+      gameState.startGame(scenario.id, scenario.maxRounds)
+      gameState.switchNpc(scenario.npcs[0].id)
+      router.navigate('/game')
+    }
   })
 
   // 返回
@@ -107,4 +117,32 @@ function typeWriter(element, text, speed = 30) {
   }
 
   type()
+}
+
+function showOverwriteConfirm(onNew) {
+  const overlay = document.createElement('div')
+  overlay.className = 'overlay'
+  overlay.innerHTML = `
+    <div class="modal confirm-dialog">
+      <div class="confirm-dialog-title" style="color:var(--color-warning);">⚠️ 发现进行中的存档</div>
+      <div class="confirm-dialog-text">你有一个该剧本的存档正在进行中。开始新游戏将保留旧存档并创建新进度，确定要重新开始吗？</div>
+      <div style="display:flex;gap:12px;">
+        <button class="btn btn-ghost" id="overwrite-cancel" style="flex:1;">取消</button>
+        <button class="btn btn-primary" id="overwrite-confirm" style="flex:1;">重新开始</button>
+      </div>
+    </div>
+  `
+  document.body.appendChild(overlay)
+  
+  const close = () => {
+    overlay.style.opacity = '0'
+    setTimeout(() => overlay.remove(), 200)
+  }
+  
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close() })
+  document.getElementById('overwrite-cancel')?.addEventListener('click', close)
+  document.getElementById('overwrite-confirm')?.addEventListener('click', () => {
+    close()
+    onNew()
+  })
 }
