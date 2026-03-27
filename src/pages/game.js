@@ -299,7 +299,7 @@ async function sendMessage(input, router) {
 
     // 如果回合用完
     if (gameState.getRemainingRounds() <= 0) {
-      setTimeout(() => reRenderGame(router), 1000)
+      setTimeout(() => showRoundExhaustedDialog(router), 1000)
     }
 
   } catch (e) {
@@ -429,4 +429,38 @@ function reRenderGame(router) {
     app.innerHTML = renderGame()
     initGame(router)
   }
+}
+
+function showRoundExhaustedDialog(router) {
+  const overlay = document.createElement('div')
+  overlay.className = 'overlay'
+  // 简易遮罩样式如果CSS没有的话内联加上
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);'
+  
+  overlay.innerHTML = `
+    <div class="result-card" style="margin: 0 16px;">
+      <div style="font-size:3rem;margin-bottom:16px;">⏰</div>
+      <h3 style="font-size:1.5rem;margin-bottom:12px;color:var(--color-danger);">对话回合已用完</h3>
+      <p style="color:var(--color-text-secondary);margin-bottom:24px;line-height:1.6;">
+        根据你收集到的线索，是时候提交你的推理了！
+      </p>
+      <div style="display:flex;gap:12px;">
+        <button class="btn btn-secondary" id="btn-stay" style="flex:1;">查看线索</button>
+        <button class="btn btn-primary" id="btn-go-deduction" style="flex:2;">
+          🔍 提交推理
+        </button>
+      </div>
+    </div>
+  `
+  document.body.appendChild(overlay)
+  
+  document.getElementById('btn-go-deduction')?.addEventListener('click', () => {
+    overlay.remove()
+    router.navigate('/deduction')
+  })
+  
+  document.getElementById('btn-stay')?.addEventListener('click', () => {
+    overlay.remove()
+    reRenderGame(router) // 刷新页面，禁用输入框但保留线索板
+  })
 }
