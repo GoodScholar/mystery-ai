@@ -1148,18 +1148,23 @@ textarea.input {
 
   .npc-sidebar-title { display: none; }
   .npc-sidebar-actions {
+    display: flex !important;
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
-    z-index: 40;
-    background: var(--color-bg-elevated);
+    padding: 12px 16px;
+    background: var(--color-bg-primary);
     border-top: 1px solid var(--color-border);
-    flex-direction: row;
-    padding: var(--space-sm) var(--space-md);
+    z-index: 100;
+    gap: 12px;
   }
 
   .chat-msg { max-width: 90%; }
+  
+  .chat-input-area {
+    padding-bottom: 72px;
+  }
 
   .clue-panel { width: 100%; }
 
