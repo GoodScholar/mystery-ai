@@ -263,6 +263,10 @@ function renderStep4() {
           <span class="preview-card-cover-emoji">${s.emoji || '🎭'}</span>
         </div>
         <div class="preview-card-body">
+          ${s._warnings && s._warnings.length > 0 
+            ? `<div style="margin-bottom:16px;padding:12px;background:rgba(251,191,36,0.1);color:var(--color-warning);border-radius:8px;font-size:0.9rem;">⚠️ ${s._warnings.length} 项建议优化: ${s._warnings[0]}</div>`
+            : `<div style="margin-bottom:16px;padding:12px;background:rgba(52,211,153,0.1);color:var(--color-success);border-radius:8px;font-size:0.9rem;">✅ 剧本结构完整，逻辑正常</div>`
+          }
           <div class="preview-card-title" id="preview-title" title="点击编辑">
             📖 《${s.title}》<span class="edit-icon">✏️</span>
           </div>
@@ -636,30 +640,43 @@ async function generateScenario(theme, desc, difficulty, npcCount, style, era, s
 4. systemPrompt 要详细，包含角色该说什么和不该说什么
 5. 凶手的 systemPrompt 中要明确他绝不直接承认，但会露出破绽`
 
-  // 最多尝试 2 次（首次 + 1 次重试）
+  // 最多尝试 3 次（包含 AI自修复校验失败）
   let data = null
-  for (let attempt = 0; attempt < 2; attempt++) {
+  let lastErrors = []
+  
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const errorPrompt = lastErrors.length > 0 
+      ? '\n\n⚠️ 注意：你上次生成的剧本存在以下严重错误，请务必修复后再次输出完整的JSON：\n- ' + lastErrors.join('\n- ')
+      : ''
+      
     const response = await aiService.chat(
       '你是一个专业的JSON生成器。只返回合法的JSON对象，不要包含任何其他文字、代码块标记或解释。',
       [],
-      attempt === 0 ? prompt : prompt + '\n\n注意：上次你的回复不是合法JSON，请确保这次只返回纯JSON对象，不要包含任何markdown标记。'
+      prompt + errorPrompt
     )
 
     // 解析 JSON
     const cleaned = response.replace(/```json?\n?/g, '').replace(/```/g, '').trim()
     try {
-      data = JSON.parse(cleaned)
-      break // 解析成功，退出重试
-    } catch (e) {
-      if (attempt === 0) {
-        console.warn('JSON 解析失败，正在重试...', e.message)
+      const parsed = JSON.parse(cleaned)
+      const val = validateScenario(parsed)
+      
+      if (!val.valid) {
+        lastErrors = val.errors
+        console.warn('剧本结构校验失败，执行 AI 修复重试...', val.errors)
         continue
       }
-      throw new Error('AI 返回的数据格式无法解析，请重试')
+      
+      data = parsed
+      if (val.hasWarnings) data._warnings = val.warnings
+      break // 解析且校验成功，退出重试
+    } catch (e) {
+      lastErrors = ['AI 返回的数据无法解析为合法 JSON']
+      console.warn('JSON 解析失败，正在重试...', e.message)
     }
   }
 
-  if (!data) throw new Error('剧本生成失败，请重试')
+  if (!data) throw new Error('剧本生成失败或存在无法修复的结构错误，请重试')
 
   // 构建完整剧本对象
   return {
@@ -683,7 +700,55 @@ async function generateScenario(theme, desc, difficulty, npcCount, style, era, s
     clues: data.clues,
     answer: data.answer,
     truthReveal: data.truthReveal,
-    isCustom: true
+    isCustom: true,
+    _warnings: data._warnings
+  }
+}
+
+// ===== 结构化校验 =====
+function validateScenario(scenario) {
+  const errors = []
+  const warnings = []
+  
+  const required = ['title', 'intro', 'npcs', 'clues', 'answer', 'truthReveal']
+  required.forEach(key => {
+    if (!scenario[key]) errors.push(`缺少必填字段: ${key}`)
+  })
+  
+  if (scenario.npcs?.length < 3) errors.push('NPC 数量不足 3 人')
+  
+  const npcIds = scenario.npcs?.map(n => n.id) || []
+  if (!npcIds.includes(scenario.answer?.suspect)) {
+    errors.push(`凶手"${scenario.answer?.suspect}"不在 NPC 列表中`)
+  }
+  
+  scenario.clues?.forEach(clue => {
+    if (!npcIds.includes(clue.source)) {
+      errors.push(`线索"${clue.title}"的来源 NPC "${clue.source}" 不存在`)
+    }
+  })
+  
+  npcIds.forEach(id => {
+    const npcName = scenario.npcs.find(n => n.id === id)?.name || id
+    if (!scenario.clues?.some(c => c.source === id)) {
+      warnings.push(`${npcName} 没有关联任何线索`)
+    }
+  })
+  
+  scenario.clues?.forEach(clue => {
+    if (!clue.keywords?.length) {
+      warnings.push(`线索"${clue.title}"缺少触发关键词`)
+    }
+  })
+  
+  if (!scenario.answer?.motiveKeywords?.length) warnings.push('动机评分关键词为空')
+  if (!scenario.answer?.methodKeywords?.length) warnings.push('手法评分关键词为空')
+  
+  return { 
+    valid: errors.length === 0, 
+    errors, 
+    warnings,
+    hasWarnings: warnings.length > 0
   }
 }
 
