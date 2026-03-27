@@ -3,15 +3,33 @@
  * 支持 OpenAI 和 Mock 模式
  */
 
+import { encryptApiKey, decryptApiKey } from './crypto-helper.js'
+
 const API_KEY_STORAGE = 'miju-ai-api-key'
 const API_BASE_STORAGE = 'miju-ai-api-base'
 const API_MODEL_STORAGE = 'miju-ai-api-model'
 
 export class AIService {
   constructor() {
-    this.apiKey = localStorage.getItem(API_KEY_STORAGE) || import.meta.env.VITE_API_KEY || ''
+    this.apiKey = ''
     this.apiBase = localStorage.getItem(API_BASE_STORAGE) || import.meta.env.VITE_API_BASE || 'https://api.deepseek.com/v1'
     this.model = localStorage.getItem(API_MODEL_STORAGE) || import.meta.env.VITE_API_MODEL || 'deepseek-chat'
+  }
+
+  async init() {
+    const stored = localStorage.getItem(API_KEY_STORAGE)
+    if (stored) {
+      // 尝试解密，若解密失败将静默返回或者返回明文 (在 crypto-helper 里处理)
+      this.apiKey = await decryptApiKey(stored)
+      
+      // 如果读取到的是明文老数据 (没包含 iv 等)，自动迁移加密
+      if (stored === this.apiKey && this.apiKey) {
+        const encrypted = await encryptApiKey(this.apiKey)
+        localStorage.setItem(API_KEY_STORAGE, encrypted)
+      }
+    } else {
+      this.apiKey = import.meta.env.VITE_API_KEY || ''
+    }
   }
 
   /** 是否配置了 API Key */
@@ -20,11 +38,13 @@ export class AIService {
   }
 
   /** 保存设置 */
-  saveSettings(apiKey, apiBase, model) {
+  async saveSettings(apiKey, apiBase, model) {
     this.apiKey = apiKey
     this.apiBase = apiBase || 'https://api.deepseek.com/v1'
     this.model = model || 'deepseek-chat'
-    localStorage.setItem(API_KEY_STORAGE, apiKey)
+    
+    const encryptedKey = await encryptApiKey(apiKey)
+    localStorage.setItem(API_KEY_STORAGE, encryptedKey)
     localStorage.setItem(API_BASE_STORAGE, this.apiBase)
     localStorage.setItem(API_MODEL_STORAGE, this.model)
   }

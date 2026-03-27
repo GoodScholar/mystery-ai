@@ -43,8 +43,10 @@ window.addEventListener('open:settings', () => {
   showSettingsModal()
 })
 
-// 启动
-router.start()
+// 初始化 AI Service 后启动路由
+aiService.init().then(() => {
+  router.start()
+})
 
 // ===== Settings Modal =====
 function escapeAttr(str) {
@@ -94,12 +96,12 @@ function showSettingsModal() {
 
   document.getElementById('settings-cancel').addEventListener('click', closeSettings)
 
-  document.getElementById('settings-save').addEventListener('click', () => {
+  document.getElementById('settings-save').addEventListener('click', async () => {
     const key = document.getElementById('settings-key').value.trim()
     const base = document.getElementById('settings-base').value.trim()
     const model = document.getElementById('settings-model').value.trim()
 
-    aiService.saveSettings(key, base, model)
+    await aiService.saveSettings(key, base, model)
     closeSettings()
 
     // 重新渲染当前页面
