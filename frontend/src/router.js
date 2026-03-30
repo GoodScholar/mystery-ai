@@ -1,6 +1,8 @@
 /**
  * 简单的 Hash-based SPA 路由器
  */
+import { audioManager } from './utils/audio-manager.js'
+
 export class Router {
   constructor(app) {
     this.app = app
@@ -33,8 +35,13 @@ export class Router {
     // 退出动画
     if (this.currentPage) {
       this.app.classList.add('page-exit')
-      await new Promise(r => setTimeout(r, 200))
+      await new Promise(r => setTimeout(r, 250))
       this.app.classList.remove('page-exit')
+    }
+
+    // 处理离开游戏时的背景音
+    if (path !== '/game') {
+      audioManager.stopBGM()
     }
 
     // 渲染新页面

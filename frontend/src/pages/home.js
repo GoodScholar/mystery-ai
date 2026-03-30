@@ -79,7 +79,10 @@ export function renderHome() {
           </div>
         </div>
 
-        <div style="text-align: center; margin-top: 48px;">
+        <div style="text-align: center; margin-top: 48px; display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+          <button class="btn btn-ghost" id="btn-import-save">🗃️ 导入存档</button>
+          <input type="file" id="import-save-input" accept=".json" style="display:none;" />
+          <button class="btn btn-ghost" id="btn-export-save">📦 导出进度</button>
           <button class="btn btn-ghost" id="btn-settings">⚙️ API 设置</button>
         </div>
       </div>
@@ -126,6 +129,54 @@ export function initHome(router) {
   // 创建剧本
   document.getElementById('btn-create-scenario')?.addEventListener('click', () => {
     router.navigate('/custom')
+  })
+
+  // 导出存档
+  document.getElementById('btn-export-save')?.addEventListener('click', () => {
+    const saves = gameState.getSaves()
+    if (saves.length === 0) {
+      alert('目前还没有可供导出的游戏进度！')
+      return
+    }
+    const latest = saves[0]
+    const jsonStr = gameState.exportSave(latest.id)
+    if (!jsonStr) return alert('导出失败')
+
+    const blob = new Blob([jsonStr], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    const date = new Date()
+    const ymd = date.getFullYear() + String(date.getMonth()+1).padStart(2,'0') + String(date.getDate()).padStart(2,'0')
+    const hm = String(date.getHours()).padStart(2,'0') + String(date.getMinutes()).padStart(2,'0')
+    a.download = `mijuai_save_${ymd}_${hm}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  })
+
+  // 导入存档
+  const importInput = document.getElementById('import-save-input')
+  document.getElementById('btn-import-save')?.addEventListener('click', () => {
+    importInput?.click()
+  })
+  
+  importInput?.addEventListener('change', (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      try {
+        gameState.importSave(event.target.result)
+        alert('存档导入成功！')
+        router.resolve()
+      } catch (err) {
+        alert('导入失败：' + err.message)
+      }
+    }
+    reader.readAsText(file)
+    e.target.value = ''
   })
 
   // 设置按钮

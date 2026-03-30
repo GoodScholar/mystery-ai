@@ -203,6 +203,42 @@ class GameState {
     } catch(e) {}
   }
   
+  // --- Export/Import ---
+  
+  exportSave(saveId) {
+    try {
+      const saved = localStorage.getItem(saveId)
+      if (!saved) return null
+      const meta = this.savesIndex.find(s => s.id === saveId) || {}
+      const exportObj = { meta, data: JSON.parse(saved) }
+      return JSON.stringify(exportObj, null, 2)
+    } catch(e) {
+      console.warn('Export error', e)
+      return null
+    }
+  }
+
+  importSave(jsonString) {
+    try {
+      const parsed = JSON.parse(jsonString)
+      if (!parsed || !parsed.meta || !parsed.data) {
+        throw new Error('无效的存档文件格式')
+      }
+      
+      const newId = 'save-' + Date.now()
+      const newMeta = { ...parsed.meta, id: newId, updatedAt: Date.now() }
+      
+      localStorage.setItem(newId, JSON.stringify(parsed.data))
+      
+      this.savesIndex.push(newMeta)
+      localStorage.setItem(INDEX_KEY, JSON.stringify(this.savesIndex))
+      return true
+    } catch(e) {
+      console.warn('Import error', e)
+      throw new Error(e.message || '导入解析失败')
+    }
+  }
+
   _migrateOldSave() {
     try {
       const old = localStorage.getItem(OLD_STORAGE_KEY)

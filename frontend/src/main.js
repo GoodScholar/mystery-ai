@@ -12,6 +12,39 @@ import { renderResult, initResult } from './pages/result.js'
 import { renderCustom, initCustom } from './pages/custom-scenario.js'
 import { aiService } from './game/ai-service.js'
 
+// ===== Theme Initialization =====
+const THEME_KEY = 'mijuai_theme'
+const FONT_SIZE_KEY = 'mijuai_font_size'
+
+function initTheme() {
+  const saved = localStorage.getItem(THEME_KEY)
+  if (saved) {
+    document.documentElement.setAttribute('data-theme', saved)
+  } else {
+    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
+  }
+
+  // Restore global font size
+  const savedFontSize = localStorage.getItem(FONT_SIZE_KEY)
+  if (savedFontSize) {
+    document.documentElement.style.fontSize = savedFontSize + 'px'
+  }
+}
+initTheme()
+
+window.setTheme = function(theme) {
+  if (theme === 'auto') {
+    localStorage.removeItem(THEME_KEY)
+    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
+  } else {
+    localStorage.setItem(THEME_KEY, theme)
+    document.documentElement.setAttribute('data-theme', theme)
+  }
+}
+// =================================
+
 // 初始化路由
 const app = document.getElementById('app')
 const router = new Router(app)
@@ -80,6 +113,23 @@ function showSettingsModal() {
         <p class="settings-hint">推荐：gemini-2.0-flash（免费）或 gpt-4o-mini</p>
       </div>
 
+      <div class="settings-group">
+        <label class="settings-label">全局字号缩放 (基于 REM)</label>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <input type="range" id="settings-fontsize" min="12" max="22" step="1" value="${localStorage.getItem(FONT_SIZE_KEY) || 16}" style="flex:1;">
+          <span id="settings-fontsize-val" style="width:40px; font-weight:600; text-align:right;">${localStorage.getItem(FONT_SIZE_KEY) || 16}px</span>
+        </div>
+      </div>
+      
+      <div class="settings-group">
+        <label class="settings-label">外观主题</label>
+        <select class="input" id="settings-theme">
+          <option value="auto" ${!localStorage.getItem('mijuai_theme') ? 'selected' : ''}>跟随系统</option>
+          <option value="dark" ${localStorage.getItem('mijuai_theme')==='dark' ? 'selected' : ''}>深色模式</option>
+          <option value="light" ${localStorage.getItem('mijuai_theme')==='light' ? 'selected' : ''}>浅色模式</option>
+        </select>
+      </div>
+
       <div style="display:flex;gap:12px;margin-top:24px;">
         <button class="btn btn-ghost" id="settings-cancel" style="flex:1;">取消</button>
         <button class="btn btn-primary" id="settings-save" style="flex:1;">保存</button>
@@ -94,13 +144,28 @@ function showSettingsModal() {
     if (e.target === overlay) closeSettings()
   })
 
-  document.getElementById('settings-cancel').addEventListener('click', closeSettings)
+  const origFontSize = document.documentElement.style.fontSize
+
+  document.getElementById('settings-fontsize')?.addEventListener('input', (e) => {
+    document.getElementById('settings-fontsize-val').textContent = e.target.value + 'px'
+    document.documentElement.style.fontSize = e.target.value + 'px'
+  })
+
+  document.getElementById('settings-cancel').addEventListener('click', () => {
+    // 恢复原字体
+    document.documentElement.style.fontSize = origFontSize
+    closeSettings()
+  })
 
   document.getElementById('settings-save').addEventListener('click', async () => {
     const key = document.getElementById('settings-key').value.trim()
     const base = document.getElementById('settings-base').value.trim()
     const model = document.getElementById('settings-model').value.trim()
+    const theme = document.getElementById('settings-theme').value
+    const fsize = document.getElementById('settings-fontsize').value
 
+    window.setTheme(theme)
+    localStorage.setItem(FONT_SIZE_KEY, fsize)
     await aiService.saveSettings(key, base, model)
     closeSettings()
 
@@ -113,3 +178,22 @@ function showSettingsModal() {
     setTimeout(() => overlay.remove(), 200)
   }
 }
+
+// 解锁 Audio
+const unlockAudio = () => {
+  audioManager.unlock()
+  document.removeEventListener('click', unlockAudio)
+  document.removeEventListener('touchstart', unlockAudio)
+}
+document.addEventListener('click', unlockAudio)
+document.addEventListener('touchstart', unlockAudio)
+
+// ===== PWA Service Worker 注册 =====
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').then(reg => {
+      console.log('SW registered!', reg)
+    }).catch(err => console.error('SW registration failed:', err))
+  })
+}
+

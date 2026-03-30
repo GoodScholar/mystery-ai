@@ -6,10 +6,71 @@ import { getScenario } from '../scenarios/scenario-registry.js'
 import { gameState } from '../game/state.js'
 import { aiService } from '../game/ai-service.js'
 import { extractClue } from '../game/clue-extractor.js'
+import { VirtualList } from '../game/virtual-list.js'
+import { audioManager } from '../utils/audio-manager.js'
 
 let scenario = null
 let mockResponseIndexes = {}
 let cluePanel = false
+let chatList = null
+
+let clueFilter = {
+  keyword: '',
+  sourceName: 'All'
+}
+
+function renderClueList() {
+  const state = gameState.get()
+  let clues = state.clues
+
+  if (clueFilter.keyword) {
+    const kw = clueFilter.keyword.toLowerCase()
+    clues = clues.filter(c => c.title.toLowerCase().includes(kw) || c.content.toLowerCase().includes(kw))
+  }
+  if (clueFilter.sourceName !== 'All') {
+    clues = clues.filter(c => c.sourceName === clueFilter.sourceName)
+  }
+
+  if (clues.length === 0) {
+    if (state.clues.length === 0) {
+      return `
+        <div style="text-align:center;padding:40px 20px;color:var(--color-text-muted);">
+          <div style="font-size:2rem;margin-bottom:12px;">🔎</div>
+          <p>还没有收集到线索</p>
+          <p style="font-size:0.85rem;margin-top:8px;">和嫌疑人对话来获取线索</p>
+        </div>
+      `
+    } else {
+       return `<div style="text-align:center;padding:40px;color:var(--color-text-muted);">没找到匹配的线索</div>`
+    }
+  }
+
+  return clues.map(clue => `
+    <div class="clue-card">
+      <div class="clue-card-source">来自 ${clue.sourceName} — ${clue.title}</div>
+      <div class="clue-card-content">${clue.content}</div>
+    </div>
+  `).join('')
+}
+
+function renderClueFilters() {
+   const state = gameState.get()
+   if (state.clues.length === 0) return ''
+   
+   const sources = ['All', ...new Set(state.clues.map(c => c.sourceName))]
+   return `
+     <div class="clue-filters">
+       <input type="text" id="clue-search" class="input" placeholder="搜索线索标题或内容..." value="${clueFilter.keyword}" style="padding: 8px; font-size: 0.9rem;">
+       <div class="clue-tags" style="margin-top:12px; display:flex; gap:8px; overflow-x:auto; padding-bottom:4px;">
+         ${sources.map(s => `
+           <span class="tag ${clueFilter.sourceName === s ? 'tag-primary' : ''} clue-source-tag" data-source="${s}" style="cursor:pointer; flex-shrink:0;">
+             ${s === 'All' ? '全部' : s}
+           </span>
+         `).join('')}
+       </div>
+     </div>
+   `
+}
 
 function loadScenario() {
   const state = gameState.get()
@@ -66,16 +127,7 @@ export function renderGame() {
 
         <!-- Chat Area -->
         <div class="chat-area">
-          <div class="chat-messages" id="chat-messages">
-            <div class="chat-msg chat-msg-npc" style="animation:none;">
-              <div class="chat-msg-sender">${activeNpc.emoji} ${activeNpc.name} · ${activeNpc.role}</div>
-              <div class="chat-msg-bubble">
-                <div style="font-size:0.85rem;color:var(--color-text-secondary);margin-bottom:8px;font-style:italic;">
-                  ${activeNpc.description}
-                </div>
-              </div>
-            </div>
-            ${renderConversation(state.activeNpcId)}
+          <div class="chat-messages" id="chat-messages" style="position:relative;overflow-y:auto;flex:1;">
           </div>
 
           <div class="chat-input-area">
@@ -101,50 +153,21 @@ export function renderGame() {
 
       <!-- Clue Panel -->
       <div class="clue-panel ${cluePanel ? 'open' : ''}" id="clue-panel">
-        <div class="clue-panel-header">
-          <h3 class="text-title" style="font-size:1.1rem;">📋 线索板</h3>
-          <button class="btn btn-ghost btn-sm" id="btn-close-clue">✕</button>
+        <div class="clue-panel-header" style="flex-wrap: wrap;">
+          <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+            <h3 class="text-title" style="font-size:1.1rem;">📋 线索板</h3>
+            <button class="btn btn-ghost btn-sm" id="btn-close-clue">✕</button>
+          </div>
+          <div id="clue-filters-container" style="width:100%; margin-top:12px;">
+            ${renderClueFilters()}
+          </div>
         </div>
-        <div class="clue-panel-body">
-          ${state.clues.length === 0 ? `
-            <div style="text-align:center;padding:40px 20px;color:var(--color-text-muted);">
-              <div style="font-size:2rem;margin-bottom:12px;">🔎</div>
-              <p>还没有收集到线索</p>
-              <p style="font-size:0.85rem;margin-top:8px;">和嫌疑人对话来获取线索</p>
-            </div>
-          ` : state.clues.map(clue => `
-            <div class="clue-card">
-              <div class="clue-card-source">来自 ${clue.sourceName} — ${clue.title}</div>
-              <div class="clue-card-content">${clue.content}</div>
-            </div>
-          `).join('')}
+        <div class="clue-panel-body" id="clue-list-container">
+          ${renderClueList()}
         </div>
       </div>
     </div>
   `
-}
-
-function renderConversation(npcId) {
-  const conv = gameState.getConversation(npcId)
-  const npc = scenario.npcs.find(n => n.id === npcId)
-
-  return conv.map(msg => {
-    if (msg.role === 'user') {
-      return `
-        <div class="chat-msg chat-msg-user">
-          <div class="chat-msg-sender">🕵️ 你</div>
-          <div class="chat-msg-bubble">${escapeHtml(msg.content)}</div>
-        </div>
-      `
-    } else {
-      return `
-        <div class="chat-msg chat-msg-npc">
-          <div class="chat-msg-sender">${npc?.emoji || '🤖'} ${npc?.name || 'NPC'}</div>
-          <div class="chat-msg-bubble">${escapeHtml(msg.content)}</div>
-        </div>
-      `
-    }
-  }).join('')
 }
 
 function escapeHtml(text) {
@@ -168,7 +191,53 @@ export function initGame(router) {
     return
   }
 
-  scrollChatToBottom()
+  const chatContainer = document.getElementById('chat-messages')
+  if (chatContainer) {
+    const npc = scenario.npcs.find(n => n.id === state.activeNpcId)
+    const history = gameState.getConversation(state.activeNpcId)
+    
+    // 初始化消息列表
+    const initialItems = [{ role: 'system_desc', content: npc.description }]
+    history.forEach(m => initialItems.push(m))
+
+    if (chatList) {
+      chatList.setItems(initialItems)
+    } else {
+      chatList = new VirtualList(chatContainer, {
+        items: initialItems,
+        estimatedItemHeight: 90,
+        buffer: 8,
+        renderItem: (item, idx) => {
+          const div = document.createElement('div')
+          div.className = `chat-msg ${item.role === 'user' ? 'chat-msg-user' : 'chat-msg-npc'}`
+          div.style.animation = 'none' 
+          
+          if (item.role === 'system_desc') {
+            div.innerHTML = `
+              <div class="chat-msg-sender">${npc.emoji} ${npc.name} · ${npc.role}</div>
+              <div class="chat-msg-bubble">
+                <div style="font-size:0.85rem;color:var(--color-text-secondary);margin-bottom:8px;font-style:italic;">
+                  ${item.content}
+                </div>
+              </div>`
+          } else if (item.role === 'user') {
+            div.innerHTML = `
+              <div class="chat-msg-sender">🕵️ 你</div>
+              <div class="chat-msg-bubble">${escapeHtml(item.content)}</div>`
+          } else if (item.role === 'system') {
+            div.style.cssText = 'align-self:center;max-width:90%;'
+            div.innerHTML = `<div class="tag tag-danger" style="font-size:0.85rem;padding:8px 16px;">${item.content}</div>`
+          } else {
+            div.innerHTML = `
+              <div class="chat-msg-sender">${npc?.emoji || '🤖'} ${npc?.name || 'NPC'}</div>
+              <div class="chat-msg-bubble">${escapeHtml(item.content)}</div>`
+          }
+          return div
+        }
+      })
+    }
+    chatList.scrollToBottom()
+  }
 
   // NPC 切换
   document.querySelectorAll('.npc-item').forEach(item => {
@@ -200,16 +269,8 @@ export function initGame(router) {
     })
   }
 
-  // 线索板
-  document.getElementById('btn-clue-panel')?.addEventListener('click', () => {
-    cluePanel = true
-    document.getElementById('clue-panel')?.classList.add('open')
-  })
-
-  document.getElementById('btn-close-clue')?.addEventListener('click', () => {
-    cluePanel = false
-    document.getElementById('clue-panel')?.classList.remove('open')
-  })
+  // 线索板事件
+  bindClueEvents()
 
   // 提交推理
   document.getElementById('btn-submit-deduction')?.addEventListener('click', () => {
@@ -220,6 +281,9 @@ export function initGame(router) {
   document.getElementById('btn-settings-game')?.addEventListener('click', () => {
     window.dispatchEvent(new CustomEvent('open:settings'))
   })
+  
+  // 播放环境音效
+  audioManager.playSuspenseBGM()
 }
 
 async function sendMessage(input, router) {
@@ -261,11 +325,8 @@ async function sendMessage(input, router) {
         text,
         // 流式回调：逐字更新气泡内容
         (chunk, fullText) => {
-          const bubble = replyBubble.querySelector('.chat-msg-bubble')
-          if (bubble) {
-            bubble.innerHTML = escapeHtml(fullText)
-          }
-          scrollChatToBottom()
+          if (replyBubble) replyBubble.updateContent(fullText)
+          if (chunk.trim()) audioManager.playTypeWriter()
         }
       )
     } else {
@@ -280,9 +341,12 @@ async function sendMessage(input, router) {
     // 添加 NPC 回复
     hideTypingIndicator()
     gameState.addMessage(npcId, 'assistant', reply)
-    // 流式模式已实时填充气泡，Mock 模式需要追加
+    // 流式模式已实时填充气泡，Mock 模式不会实时填充，需要单独更新
     if (!aiService.isConfigured) {
       appendMessage('assistant', reply, npc)
+    } else if (replyBubble && replyBubble.index !== undefined) {
+      // 保证最终内容完整
+      replyBubble.updateContent(reply)
     }
 
     // 线索提取
@@ -309,54 +373,33 @@ async function sendMessage(input, router) {
 }
 
 function appendMessage(role, content, npc) {
-  const container = document.getElementById('chat-messages')
-  if (!container) return
-
-  const div = document.createElement('div')
-  div.className = `chat-msg ${role === 'user' ? 'chat-msg-user' : 'chat-msg-npc'}`
-
-  if (role === 'user') {
-    div.innerHTML = `
-      <div class="chat-msg-sender">🕵️ 你</div>
-      <div class="chat-msg-bubble">${escapeHtml(content)}</div>
-    `
-  } else {
-    div.innerHTML = `
-      <div class="chat-msg-sender">${npc?.emoji || '🤖'} ${npc?.name || 'NPC'}</div>
-      <div class="chat-msg-bubble">${escapeHtml(content)}</div>
-    `
+  if (chatList) {
+    chatList.appendItem({ role, content })
   }
-
-  container.appendChild(div)
-  scrollChatToBottom()
 }
 
 /** 创建空的 NPC 回复气泡（用于流式填充） */
 function createEmptyReplyBubble(npc) {
-  const container = document.getElementById('chat-messages')
-  if (!container) return null
-
-  const div = document.createElement('div')
-  div.className = 'chat-msg chat-msg-npc'
-  div.innerHTML = `
-    <div class="chat-msg-sender">${npc?.emoji || '🤖'} ${npc?.name || 'NPC'}</div>
-    <div class="chat-msg-bubble"></div>
-  `
-  container.appendChild(div)
-  scrollChatToBottom()
-  return div
+  if (!chatList) return null
+  chatList.appendItem({ role: 'assistant', content: '' })
+  
+  return {
+    index: chatList.items.length - 1,
+    updateContent: function(text) {
+       chatList.items[this.index].content = text;
+       const dom = chatList.renderedDomMap.get(this.index);
+       if (dom) {
+          const bubble = dom.querySelector('.chat-msg-bubble');
+          if (bubble) bubble.innerHTML = escapeHtml(text);
+          chatList.updateItemHeight(this.index);
+       }
+       chatList.scrollToBottom();
+    }
+  }
 }
 
 function appendSystemMessage(text) {
-  const container = document.getElementById('chat-messages')
-  if (!container) return
-
-  const div = document.createElement('div')
-  div.className = 'chat-msg'
-  div.style.cssText = 'align-self:center;max-width:90%;'
-  div.innerHTML = `<div class="tag tag-danger" style="font-size:0.85rem;padding:8px 16px;">${text}</div>`
-  container.appendChild(div)
-  scrollChatToBottom()
+  if (chatList) chatList.appendItem({ role: 'system', content: text })
 }
 
 function showTypingIndicator() {
@@ -381,6 +424,11 @@ function showClueNotification(clue) {
   if (btn) {
     const state = gameState.get()
     btn.innerHTML = `📋 线索板 <span class="tag tag-gold" style="margin-left:4px">${state.clues.length}</span>`
+  }
+  
+  // 如果面板处于打开状态，立即刷新其内部视图以动态插入新线索
+  if (cluePanel) {
+    updateClueView(false)
   }
 
   // 浮动通知
@@ -415,11 +463,13 @@ function updateRoundCounter() {
 }
 
 function scrollChatToBottom() {
-  const container = document.getElementById('chat-messages')
-  if (container) {
-    requestAnimationFrame(() => {
+  if (chatList) {
+    chatList.scrollToBottom()
+  } else {
+    const container = document.getElementById('chat-messages')
+    if (container) {
       container.scrollTop = container.scrollHeight
-    })
+    }
   }
 }
 
@@ -464,3 +514,50 @@ function showRoundExhaustedDialog(router) {
     reRenderGame(router) // 刷新页面，禁用输入框但保留线索板
   })
 }
+
+function bindClueEvents() {
+  document.getElementById('btn-clue-panel')?.addEventListener('click', () => {
+    cluePanel = true
+    document.getElementById('clue-panel')?.classList.add('open')
+    updateClueView(true)
+  })
+
+  document.getElementById('btn-close-clue')?.addEventListener('click', () => {
+    cluePanel = false
+    document.getElementById('clue-panel')?.classList.remove('open')
+  })
+}
+
+let clueSearchTimer = null;
+function updateClueView(focusAndSelect = false) {
+  const filterContainer = document.getElementById('clue-filters-container')
+  const listContainer = document.getElementById('clue-list-container')
+  if (filterContainer) filterContainer.innerHTML = renderClueFilters()
+  if (listContainer) listContainer.innerHTML = renderClueList()
+
+  // 重新绑定过滤器事件
+  const searchInput = document.getElementById('clue-search')
+  if (searchInput) {
+    if (focusAndSelect) {
+      searchInput.focus()
+      const len = searchInput.value.length
+      searchInput.setSelectionRange(len, len)
+    }
+    
+    searchInput.addEventListener('input', (e) => {
+      if (clueSearchTimer) clearTimeout(clueSearchTimer)
+      clueSearchTimer = setTimeout(() => {
+        clueFilter.keyword = e.target.value
+        updateClueView(true)
+      }, 300)
+    })
+  }
+
+  document.querySelectorAll('.clue-source-tag').forEach(tag => {
+    tag.addEventListener('click', (e) => {
+      clueFilter.sourceName = e.target.dataset.source
+      updateClueView(true) // Re-focus search to keep typing coherent if user uses keyboard
+    })
+  })
+}
+

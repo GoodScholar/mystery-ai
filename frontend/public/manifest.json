@@ -1,0 +1,17 @@
+{
+  "name": "迷局AI - 推理解谜",
+  "short_name": "迷局AI",
+  "description": "基于大语言模型的推理解谜游戏平台",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0f",
+  "theme_color": "#0a0a0f",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

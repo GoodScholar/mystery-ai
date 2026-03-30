@@ -61,6 +61,33 @@
   --duration-slow: 500ms;
 }
 
+[data-theme="light"] {
+  /* 浅色主题背景 */
+  --color-bg: #f9fafb;
+  --color-bg-elevated: #ffffff;
+  --color-bg-card: #ffffff;
+  --color-bg-input: #f3f4f680;
+  --color-surface: #f3f4f6;
+  --color-border: #e5e7eb;
+  --color-border-subtle: #f3f4f6;
+
+  /* 强调色微调（更适合浅层级） */
+  --color-primary: #6366f1;
+  --color-primary-glow: #6366f140;
+  --color-accent: #a855f7;
+  --color-accent-glow: #a855f720;
+  --color-gold: #eab308;
+  --color-danger: #ef4444;
+  --color-success: #10b981;
+  --color-warning: #f97316;
+
+  /* 浅色主题文字 */
+  --color-text: #1f2937;
+  --color-text-secondary: #4b5563;
+  --color-text-muted: #6b7280;
+  --color-text-highlight: #111827;
+}
+
 /* --- Reset & Global --- */
 *, *::before, *::after {
   margin: 0;
@@ -110,27 +137,33 @@ a:hover { text-decoration: underline; }
 
 /* --- Page Transitions --- */
 .page {
-  animation: pageIn var(--duration-slow) var(--ease-smooth) both;
+  animation: pageIn var(--duration-normal) var(--ease-spring) both;
 }
 
 .page-exit {
-  animation: pageOut var(--duration-normal) var(--ease-smooth) both;
+  animation: pageOut var(--duration-fast) var(--ease-smooth) both;
 }
 
 @keyframes pageIn {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(20px) scale(0.98);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
 @keyframes pageOut {
-  from { opacity: 1; transform: translateY(0); }
-  to { opacity: 0; transform: translateY(-10px); }
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.98);
+  }
 }
 
 /* --- Typography --- */

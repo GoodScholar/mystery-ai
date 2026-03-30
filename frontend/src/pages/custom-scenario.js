@@ -8,6 +8,7 @@
 
 import { aiService } from '../game/ai-service.js'
 import { addCustomScenario } from '../scenarios/scenario-registry.js'
+import { draftManager } from '../utils/draft-manager.js'
 
 // ===== 常量 =====
 const THEME_TEMPLATES = [
@@ -72,6 +73,17 @@ const STEP_LABELS = [
 let wizardState = {}
 let generateTimer = null
 
+let draftTimer = null
+function saveDraftDebounced() {
+  if (draftTimer) clearTimeout(draftTimer)
+  draftTimer = setTimeout(() => {
+    // 只在未生成最终剧本的流程阶段存入草稿
+    if (wizardState.currentStep < 4 && !wizardState.generatedScenario) {
+      draftManager.saveDraft(wizardState)
+    }
+  }, 500)
+}
+
 function resetState() {
   wizardState = {
     currentStep: 1,
@@ -89,7 +101,7 @@ function resetState() {
 
 // ===== 渲染 =====
 export function renderCustom() {
-  resetState()
+  const currentStep = wizardState.currentStep || 1
   return `
     <div class="custom page">
       <div class="container" style="max-width:720px;">
@@ -100,10 +112,12 @@ export function renderCustom() {
           </p>
         </div>
 
-        ${renderStepper(1)}
+        <div id="wizard-stepper-placeholder">
+          ${renderStepper(currentStep)}
+        </div>
 
         <div id="wizard-content">
-          ${renderStep1()}
+          ${currentStep === 1 ? renderStep1() : ''}
         </div>
       </div>
     </div>
@@ -173,13 +187,40 @@ function renderStep1() {
   `
 }
 
+// ===== 实时预览辅助函数 =====
+function renderLiveMeta() {
+   const difficultyMap = { 2: '入门', 3: '进阶', 4: '困难', 5: '大师' }
+   let html = ''
+   if (wizardState.style) {
+       const lbl = STYLE_OPTIONS.find(o=>o.value===wizardState.style)?.label || ''
+       html += `<span class="tag tag-primary">风格:${lbl.substring(lbl.indexOf(' ')+1)}</span>`
+   }
+   if (wizardState.era) {
+       const lbl = ERA_OPTIONS.find(o=>o.value===wizardState.era)?.label || ''
+       html += `<span class="tag tag-gold">背景:${lbl.substring(lbl.indexOf(' ')+1)}</span>`
+   }
+   if (wizardState.difficulty) {
+       html += `<span class="tag tag-danger">⭐ ${difficultyMap[wizardState.difficulty] || '未知'}</span>`
+   }
+   if (wizardState.npcCount) {
+       html += `<span class="tag tag-accent">👥 ${wizardState.npcCount}人</span>`
+   }
+   return html || '<span class="tag">请在左侧选择设定...</span>'
+}
+
 // ===== Step 2: 剧本设定 =====
 function renderStep2() {
+  const emoji = THEME_TEMPLATES[wizardState.selectedTemplate]?.emoji || '🎭'
+  const title = wizardState.theme || '未命名剧本'
+  const desc = wizardState.description || '暂无详细背景描述...'
+
   return `
     <div class="wizard-panel" id="step-2">
-      <div class="setting-group">
-        <div class="setting-group-title">🎨 故事风格</div>
-        <div class="option-chips" data-group="style">
+      <div class="step-2-layout" style="display:flex; gap:32px; flex-wrap:wrap;">
+        <div class="step-2-form" style="flex: 1; min-width: 320px;">
+          <div class="setting-group">
+            <div class="setting-group-title">🎨 故事风格</div>
+            <div class="option-chips" data-group="style">
           ${STYLE_OPTIONS.map(o => `
             <div class="option-chip ${wizardState.style === o.value ? 'selected' : ''}" data-value="${o.value}" title="${o.desc}">
               ${o.label}
@@ -225,8 +266,36 @@ function renderStep2() {
         <div class="setting-group-title">💡 特殊要求（可选）</div>
         <textarea class="input" id="custom-special" rows="2" placeholder="如：需要有密室诡计、希望凶手是最不可能的人...">${wizardState.specialRequest}</textarea>
       </div>
+      </div> <!-- form end -->
 
-      <div class="wizard-actions">
+      <!-- 实时预览区 -->
+      <div class="step-2-preview" style="flex: 1; min-width: 320px;">
+        <div style="position: sticky; top: 20px;">
+          <div class="setting-group-title">👁️ 本地评估预览</div>
+          <div class="preview-card" style="margin:0;">
+            <div class="preview-card-cover" style="height:120px; background: linear-gradient(135deg, #1e3a8a 0%, #1e1b4b 100%);">
+              <span class="preview-card-cover-emoji" id="live-emoji" style="font-size:3rem;">${emoji}</span>
+            </div>
+            <div class="preview-card-body">
+              <div class="preview-card-title" id="live-title" style="font-size:1.1rem;margin-bottom:8px;">
+                《${title}》
+              </div>
+              <div class="preview-card-meta" id="live-meta">
+                ${renderLiveMeta()}
+              </div>
+              <div style="font-size:0.85rem; color:var(--color-text-secondary); margin-top:12px; line-height:1.5;">
+                ${desc}
+              </div>
+            </div>
+          </div>
+          <div style="margin-top:16px; font-size:0.8rem; color:var(--color-text-muted); text-align:center;">
+            <p>ℹ️ 实际生成的情节、嫌疑人与诡计将基于此设定大纲由 AI 发散</p>
+          </div>
+        </div>
+      </div> <!-- preview end -->
+      </div> <!-- layout end -->
+
+      <div class="wizard-actions" style="margin-top:32px; border-top:1px solid rgba(255,255,255,0.1); padding-top:24px;">
         <button class="btn btn-ghost" id="btn-prev-step1">← 上一步</button>
         <button class="btn btn-primary btn-lg" id="btn-generate">🤖 开始生成剧本</button>
       </div>
@@ -317,6 +386,10 @@ function goToStep(step, direction, router) {
   const stepperContainer = document.getElementById('wizard-stepper')
   if (stepperContainer) {
     stepperContainer.outerHTML = renderStepper(step)
+  } else {
+    // 兼容第一次渲染
+    const holder = document.getElementById('wizard-stepper-placeholder')
+    if (holder) holder.innerHTML = renderStepper(step)
   }
 
   // 渲染内容
@@ -382,7 +455,18 @@ function bindStep1Events(router) {
 
       const themeInput = document.getElementById('custom-theme')
       if (themeInput) themeInput.value = template.name
+      
+      saveDraftDebounced()
     })
+  })
+
+  document.getElementById('custom-theme')?.addEventListener('input', (e) => {
+     wizardState.theme = e.target.value
+     saveDraftDebounced()
+  })
+  document.getElementById('custom-desc')?.addEventListener('input', (e) => {
+     wizardState.description = e.target.value
+     saveDraftDebounced()
   })
 
   // 下一步
@@ -417,8 +501,21 @@ function bindStep2Events(router) {
         } else {
           wizardState[groupName] = value
         }
+        
+        // 实时更新预览
+        const metaContainer = document.getElementById('live-meta')
+        if (metaContainer) {
+           metaContainer.innerHTML = renderLiveMeta()
+        }
+        
+        saveDraftDebounced()
       })
     })
+  })
+
+  document.getElementById('custom-special')?.addEventListener('input', (e) => {
+      wizardState.specialRequest = e.target.value
+      saveDraftDebounced()
   })
 
   // 上一步
@@ -567,14 +664,34 @@ function bindStep4Events(router) {
   document.getElementById('btn-start-game')?.addEventListener('click', () => {
     addCustomScenario(scenario)
     sessionStorage.setItem('miju-selected-scenario', scenario.id)
+    draftManager.clearDraft() // 成功生成并使用后清除草稿
     router.navigate('/intro')
   })
 }
 
 // ===== 初始化 =====
 export function initCustom(router) {
-  resetState()
-  bindStep1Events(router)
+  const draft = draftManager.getDraft()
+  let hasRestored = false
+  
+  if (draft && draft.state && (Date.now() - draft.timestamp < 7 * 24 * 3600 * 1000)) {
+    const isProceed = confirm(`📝 检测到您有未完成的剧本草稿（最后修改：${new Date(draft.timestamp).toLocaleTimeString()}），是否恢复继续编辑？`)
+    if (isProceed) {
+       wizardState = draft.state
+       hasRestored = true
+    } else {
+       draftManager.clearDraft()
+       resetState()
+    }
+  } else {
+    resetState()
+  }
+  
+  if (hasRestored && wizardState.currentStep) {
+     goToStep(wizardState.currentStep, 'forward', router)
+  } else {
+     goToStep(1, 'forward', router)
+  }
 }
 
 // ===== AI 生成 =====
